@@ -9,9 +9,9 @@ primary_region = 'iad'
   # If it's in the parent directory (e.g., project root) and your context is there, adjust path or ensure build context is websocket_server
   # dockerfile = "Dockerfile" # Often not needed if Dockerfile is standard name and location relative to context
 
-# Explicitly define how the app is run (maps to CMD in Dockerfile)
+# Explicitly define how the app is run. This overrides the CMD in the Dockerfile.
 [processes]
-  app = "run --allow-net --allow-env main.ts" # This overrides the CMD in Dockerfile, ensure it matches your intent
+  app = "npm start"
 
 # HTTP Service (Port 80) - primarily for HTTP to HTTPS redirect
 [[services]]
