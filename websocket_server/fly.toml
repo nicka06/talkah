@@ -1,0 +1,55 @@
+# fly.toml app configuration file for websocket-server-ancient-shape-3559
+# Using explicit [[services]] for WebSocket handling
+
+app = 'websocket-server-ancient-shape-3559'
+primary_region = 'iad'
+
+[build]
+  # Assuming your Dockerfile is in the same directory as fly.toml
+  # If it's in the parent directory (e.g., project root) and your context is there, adjust path or ensure build context is websocket_server
+  # dockerfile = "Dockerfile" # Often not needed if Dockerfile is standard name and location relative to context
+
+# Explicitly define how the app is run (maps to CMD in Dockerfile)
+[processes]
+  app = "run --allow-net --allow-env main.ts" # This overrides the CMD in Dockerfile, ensure it matches your intent
+
+# HTTP Service (Port 80) - primarily for HTTP to HTTPS redirect
+[[services]]
+  internal_port = 8080 # Your Deno app's port
+  protocol = "tcp"
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true # Redirects HTTP to HTTPS (and thus WS to WSS implicitly)
+
+# HTTPS / WSS Service (Port 443)
+[[services]]
+  internal_port = 8080 # Your Deno app's port
+  protocol = "tcp"
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"] # tls for HTTPS/WSS, http for the WebSocket upgrade request over TLS
+  
+  # Optional: Define TCP health checks if needed, but Deno should exit on error
+  # which Fly.io will detect. HTTP checks are also an option.
+  # [[services.http_checks]]
+  #   interval = "10s"
+  #   timeout = "2s"
+  #   method = "GET"
+  #   path = "/" # Ensure your app responds 200 OK to this
+
+# VM Resources (adjust as needed)
+[[vm]]
+  memory = '1gb' # This was in your previous toml, keeping it.
+  cpu_kind = 'shared'
+  cpus = 1

@@ -1,0 +1,175 @@
+NEW_PROJECT_PLAN_START
+
+### **Project: AI Conversational Calling Agent (Flutter & Supabase Edition)**
+
+**Overall Goal:** Develop an iOS application using Flutter where a user can input their phone number and a topic, and then receive a call from an AI (using ElevenLabs for voice) that discusses the specified topic with them. The call will feature a wrap-up prompt at 9:50 and end at 10 minutes.
+
+**Key Technologies:**
+*   **Frontend:** Flutter (for iOS)
+*   **Backend Platform:** Supabase (PostgreSQL, Auth, Edge Functions - TypeScript/JavaScript)
+*   **Telephony:** Twilio (Voice API, Media Streams)
+*   **Speech-to-Text (STT):** Google Cloud Speech-to-Text (Streaming) (Can be revisited if another is preferred)
+*   **Language Model (LLM):** OpenAI API (GPT series)
+*   **Text-to-Speech (TTS):** ElevenLabs API (Requires verification of streaming capabilities)
+*   **WebSocket Service (for Twilio Media Streams):** External Node.js server (or similar, e.g., Python/FastAPI)
+*   **Development Tunneling:** ngrok (or similar)
+
+---
+
+**Phase 1: Project Setup & Core Backend Infrastructure (Supabase, Twilio, Initial Functions)**
+
+*   **[X] 1.1. Accounts & Credentials**
+    *   [X] 1.1.1. Create/Verify Twilio Account:
+        *   [X] Obtain Account SID & Auth Token.
+        *   [X] Purchase/Verify a Twilio phone number with voice capabilities. (Ensure it can handle concurrent calls as needed for your scale).
+    *   [X] 1.1.2. Create/Verify Supabase Account:
+        *   [X] Set up a new project.
+        *   [X] Familiarize with Supabase Studio, Database (PostgreSQL), Edge Functions, and Auth.
+    *   [X] 1.1.3. Create/Verify Google Cloud Platform (GCP) Account (for STT):
+        *   [X] Enable Cloud Speech-to-Text API.
+        *   [X] Set up authentication.
+    *   [X] 1.1.4. Create/Verify OpenAI Account:
+        *   [X] Obtain API Key.
+    *   [X] 1.1.5. Create/Verify ElevenLabs Account:
+        *   [X] Obtain API Key.
+        *   **[X] Research and verify ElevenLabs streaming TTS API suitability for real-time, low-latency voice generation.**
+    *   [X] 1.1.6. Securely store all credentials (e.g., Supabase project secrets, environment variables for local development and external WebSocket service).
+*   **[ ] 1.2. Supabase Setup**
+    *   [ ] 1.2.1. Define Database Schema in Supabase for `calls`:
+        *   Fields: `id` (PK), `created_at`, `user_id` (if using Supabase Auth), `user_phone_number`, `topic`, `twilio_call_sid`, `status` (e.g., `initiating`, `ringing`, `answered`, `in_progress`, `wrapping_up`, `completed`, `failed`), `answered_time`, `ended_time`, `duration_seconds`.
+    *   [ ] 1.2.2. Set up Supabase CLI and link to your project.
+    *   [ ] 1.2.3. (Optional) Implement basic Row Level Security (RLS) policies if user authentication will be used.
+*   **[ ] 1.3. Initial Supabase Edge Functions (TypeScript/JavaScript)**
+    *   [X] 1.3.1. Function: `initiate-call` (HTTP POST)
+        *   [X] Receives `user_phone_number`, `topic` (and `user_id` if auth is used).
+        *   [X] Basic input validation.
+        *   [X] Initializes Twilio client (using Account SID/Auth Token from secrets).
+        *   [X] Makes `client.calls.create()`:
+            *   [X] `to`: `user_phone_number`.
+            *   [X] `from`: Your Twilio number.
+            *   [X] `url`: Points to another Supabase Function (`twilio-voice-connect-stream`) that will serve TwiML.
+            *   [X] `statusCallback`: Points to another Supabase Function (`twilio-status-callback`).
+            *   [X] `statusCallbackEvent`: `initiated`, `ringing`, `answered`, `completed`.
+        *   [X] Creates a record in the Supabase `calls` table with initial details and `twilio_call_sid`.
+        *   [X] Returns `call_sid` or success/failure to the Flutter app.
+    *   [ ] 1.3.2. Function: `twilio-voice-connect-stream` (HTTP GET)
+        *   [ ] Invoked by Twilio when the call is answered.
+        *   [ ] Receives `CallSid` from Twilio.
+        *   [ ] Generates TwiML: `<Response><Connect><Stream url="wss://YOUR_EXTERNAL_WEBSOCKET_SERVICE_URL/ws/audio-stream?callSid=CALL_SID&prompt=ENCODED_TOPIC" /></Connect></Response>`. (Topic needs to be passed securely, perhaps via a short-lived token or by fetching from DB using `CallSid`).
+        *   [ ] Updates the call record in Supabase: status to `answered`, set `answered_time`.
+    *   [ ] 1.3.3. Function: `twilio-status-callback` (HTTP POST)
+        *   [ ] Receives status updates from Twilio.
+        *   [ ] Updates the call record in Supabase with the latest `status`, `ended_time`, `duration_seconds`.
+*   **[ ] 1.4. Flutter Project Setup**
+    *   [ ] 1.4.1. Install Flutter SDK.
+    *   [ ] 1.4.2. Create a new Flutter project.
+    *   [ ] 1.4.3. Add necessary dependencies to `pubspec.yaml` (e.g., `http` for API calls, `supabase_flutter` for Supabase integration).
+    *   [ ] 1.4.4. Set up basic project structure (folders for screens, services, models).
+    *   [ ] 1.4.5. Configure for iOS build.
+
+**Phase 2: External WebSocket Service for Twilio Media Streams**
+
+*   **[ ] 2.1. Choose Technology for WebSocket Service**
+    *   [ ] Example: Node.js with `ws` library, or Python with `websockets`/`FastAPI`.
+*   **[ ] 2.2. Develop WebSocket Server Logic**
+    *   [ ] 2.2.1. Endpoint: `/ws/audio-stream`
+        *   [ ] Handle WebSocket connections from Twilio.
+        *   [ ] Extract `callSid` and `prompt` (topic) from query parameters.
+        *   [ ] Store `streamSid` from Twilio's `start` message.
+    *   [ ] 2.2.2. Manage Call State (in-memory for the WebSocket instance, coordinated with Supabase if needed for persistence beyond the socket life).
+        *   [ ] Track `answered_time` (can be fetched from Supabase using `callSid` or passed in).
+        *   [ ] Maintain conversation history.
+    *   **[ ] This WebSocket service will be the core for Phase 3 (AI Pipeline) and Phase 4 (Call Control).**
+*   **[ ] 2.3. Deployment of WebSocket Service**
+    *   [ ] Choose a platform (e.g., Fly.io, Heroku, Render, small VM).
+    *   [ ] Configure environment variables/secrets.
+    *   [ ] Ensure it has a public WSS URL.
+*   **[ ] 2.4. ngrok Setup for Local Development**
+    *   [ ] Expose both Supabase local functions (if running locally) and the local WebSocket service for Twilio to reach.
+
+**Phase 3: Real-time AI Pipeline (within WebSocket Service)**
+
+*   **[ ] 3.1. Handling Incoming Twilio Audio (Media Messages)**
+    *   [ ] 3.1.1. Receive `media` event messages from Twilio.
+    *   [ ] 3.1.2. Decode base64 audio payload (PCMU/mulaw).
+*   **[ ] 3.2. Streaming STT Integration (Google Cloud)**
+    *   [ ] 3.2.1. Initialize Google Cloud STT client for streaming.
+    *   [ ] 3.2.2. Stream decoded audio to Google STT.
+    *   [ ] 3.2.3. Handle interim and final transcriptions.
+*   **[ ] 3.3. LLM Integration (OpenAI)**
+    *   [ ] 3.3.1. Initialize OpenAI client.
+    *   [ ] 3.3.2. On final STT result, formulate prompt for LLM (original topic, conversation history, and special instructions like wrap-up prompt based on timing).
+    *   [ ] 3.3.3. Call OpenAI API with `stream=True`.
+    *   [ ] 3.3.4. Handle streaming response tokens from LLM.
+*   **[ ] 3.4. Streaming TTS Integration (ElevenLabs)**
+    *   [ ] 3.4.1. Initialize ElevenLabs client.
+    *   **[ ] 3.4.2. Verify and implement streaming of LLM text to ElevenLabs API and receiving audio stream back.** (This is critical based on 1.1.5 research).
+    *   [ ] 3.4.3. Ensure audio format from ElevenLabs is compatible with Twilio (PCMU/mulaw, 8000Hz) or transcode if necessary.
+*   **[ ] 3.5. Sending Audio Back to Twilio**
+    *   [ ] 3.5.1. Base64 encode TTS audio chunks.
+    *   [ ] 3.5.2. Send JSON `media` messages back to Twilio over WebSocket.
+*   **[ ] 3.6. Conversation History Management**
+    *   [ ] 3.6.1. Append user utterances (from STT) and AI responses (from LLM) to a temporary conversation history for the current call.
+
+**Phase 4: Call Control, Timing, and Robustness (within WebSocket Service & Supabase Functions)**
+
+*   **[ ] 4.1. Call Time Limit & Wrap-up Logic (in WebSocket Service)**
+    *   [ ] 4.1.1. Continuously check current call duration against `answered_time`.
+    *   [ ] 4.1.2. **At 9 minutes 50 seconds:**
+        *   [ ] Inject a special instruction/prompt into the LLM request, asking it to naturally conclude the conversation.
+        *   [ ] Update call status in Supabase DB to `wrapping_up` (via an API call to a Supabase Edge Function from WebSocket service, or directly if secure DB access is configured).
+    *   [ ] 4.1.3. **At 10 minutes (or slightly after to allow wrap-up to be spoken):**
+        *   [ ] If AI hasn't finished speaking its wrap-up, send a final pre-canned TTS "Goodbye" message.
+        *   [ ] Trigger call termination: The WebSocket service calls a Supabase Edge Function (e.g., `terminate-call`) which uses the Twilio REST API to update the call resource to `status='completed'`.
+        *   [ ] Close WebSocket gracefully.
+*   **[ ] 4.2. Graceful Call Termination Scenarios**
+    *   [ ] 4.2.1. AI Decides to End (before 9:50): Similar to 4.1.3, trigger call termination.
+    *   [ ] 4.2.2. User Hangs Up: Twilio sends `stop` on WebSocket. `twilio-status-callback` function in Supabase handles DB update. WebSocket cleans up.
+*   **[ ] 4.3. Concurrency Management**
+    *   [ ] 4.3.1. Ensure WebSocket service can handle multiple concurrent connections, each managing its own call state, AI clients, and history independently.
+    *   [ ] 4.3.2. Supabase Edge Functions are inherently scalable for concurrent HTTP requests.
+*   **[ ] 4.4. Error Handling & Logging**
+    *   [ ] 4.4.1. Robust error handling in WebSocket service (for AI API errors, Twilio errors).
+    *   [ ] 4.4.2. Comprehensive logging in WebSocket service and Supabase Functions. (Consider Supabase Logs or an external logging service).
+
+**Phase 5: Flutter Frontend Development (iOS App)**
+
+*   **[ ] 5.1. UI Screens**
+    *   [ ] 5.1.1. Main Screen:
+        *   [ ] Input for Phone Number.
+        *   [ ] Input for Conversation Topic.
+        *   [ ] "Start Call" button.
+        *   [ ] Area for call status display (e.g., "Initiating...", "Ringing...", "Connected", "Call Ended").
+    *   [ ] 5.1.2. (Optional) Settings screen for API keys if not hardcoding for dev, or user login if using Supabase Auth.
+*   **[ ] 5.2. State Management (Flutter)**
+    *   [ ] Choose a state management solution (e.g., Provider, Riverpod, BLoC).
+    *   [ ] Manage UI state based on user input and call progress.
+*   **[ ] 5.3. API Service Layer (Flutter)**
+    *   [ ] Create Dart functions to call Supabase Edge Functions (e.g., `initiate-call`).
+    *   [ ] Handle responses and errors.
+*   **[ ] 5.4. User Authentication (Optional, with Supabase Auth)**
+    *   [ ] If implemented, integrate login/signup flows.
+*   **[ ] 5.5. Displaying Call Status**
+    *   [ ] Update UI based on responses from `initiate-call` and potentially by subscribing to call status changes in Supabase DB (using Supabase Realtime if feasible for this, or polling).
+*   **[ ] 5.6. iOS Specifics**
+    *   [ ] Configure app permissions (e.g., microphone if Flutter app itself were to capture audio, but not needed for this flow as Twilio handles it).
+    *   [ ] Test on iOS simulators and physical devices.
+
+**Phase 6: Testing, Deployment & Refinements**
+
+*   **[ ] 6.1. End-to-End Testing**
+    *   [ ] Test full flow: Flutter app -> Supabase Functions -> External WebSocket Service -> Twilio call -> AI conversation (STT -> LLM -> ElevenLabs TTS) -> wrap-up -> call termination.
+    *   [ ] Test concurrency with multiple simulated users.
+*   **[ ] 6.2. Deployment**
+    *   [ ] 6.2.1. Deploy Supabase Edge Functions.
+    *   [ ] 6.2.2. Deploy External WebSocket Service to chosen platform.
+    *   [ ] 6.2.3. Configure all production URLs and environment variables/secrets.
+    *   [ ] 6.2.4. Build and submit iOS app to App Store Connect.
+*   **[ ] 6.3. Monitoring & Logging**
+    *   [ ] Set up monitoring for Supabase, WebSocket service, and Twilio.
+*   **[ ] 6.4. Documentation**
+    *   [ ] README for setup.
+    *   [ ] Basic architecture diagram.
+
+---
+NEW_PROJECT_PLAN_END
