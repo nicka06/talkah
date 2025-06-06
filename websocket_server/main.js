@@ -69,24 +69,41 @@ async function handleLLM(connectionId, transcript) {
 
   try {
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o", // Or another suitable model
+      model: "gpt-4o", 
       messages: connectionData.conversationHistory,
       stream: true,
     });
 
+    let sentenceBuffer = "";
     let fullResponse = "";
+
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || "";
       if (content) {
         fullResponse += content;
+        sentenceBuffer += content;
+        
+        const sentenceEndIndex = sentenceBuffer.search(/[.!?]/);
+        if (sentenceEndIndex !== -1) {
+          const sentence = sentenceBuffer.substring(0, sentenceEndIndex + 1).trim();
+          if (sentence) {
+            // Don't await. This lets TTS start for the first sentence 
+            // while the LLM works on the next one.
+            handleTTS(connectionId, sentence); 
+          }
+          sentenceBuffer = sentenceBuffer.substring(sentenceEndIndex + 1);
+        }
       }
     }
-    
+
+    // Send any remaining text in the buffer
+    if (sentenceBuffer.trim()) {
+      handleTTS(connectionId, sentenceBuffer.trim());
+    }
+
     if (fullResponse) {
-       console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Received from OpenAI:`, fullResponse);
-       // Add AI's response to history
+       console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Full response from OpenAI:`, fullResponse);
        connectionData.conversationHistory.push({ role: "assistant", content: fullResponse });
-       await handleTTS(connectionId, fullResponse);
     }
 
   } catch (error) {
@@ -101,41 +118,55 @@ async function handleTTS(connectionId, textToSpeak) {
     return;
   }
 
-  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Sending to ElevenLabs: "${textToSpeak}"`);
+  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Streaming to ElevenLabs: "${textToSpeak}"`);
 
   const voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel's Voice ID
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=ulaw_8000`;
   
-  try {
-    const response = await axios.post(url, {
-        text: textToSpeak,
-        model_id: "eleven_turbo_v2",
-    }, {
-        headers: {
-            'xi-api-key': ELEVENLABS_API_KEY,
-            'Content-Type': 'application/json',
-            'Accept': 'audio/mulaw'
-        },
-        responseType: 'arraybuffer' // Get the response as a raw buffer
-    });
-
-    const audioBase64 = Buffer.from(response.data, 'binary').toString('base64');
-    
-    if (connectionData.socket.readyState === WebSocket.OPEN && connectionData.twilioStreamSid) {
-      const mediaMessage = JSON.stringify({
-        event: "media",
-        streamSid: connectionData.twilioStreamSid,
-        media: {
-          payload: audioBase64,
-        },
+  // Return a promise that resolves when the stream is finished
+  return new Promise(async (resolve, reject) => {
+    try {
+      const response = await axios.post(url, {
+          text: textToSpeak,
+          model_id: "eleven_turbo_v2",
+      }, {
+          headers: {
+              'xi-api-key': ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mulaw'
+          },
+          responseType: 'stream' // Set response type to stream
       });
-      connectionData.socket.send(mediaMessage);
-      console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Sent TTS audio to Twilio.`);
-    }
 
-  } catch (error) {
-    console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) ElevenLabs error:`, error.response ? error.response.data : error.message);
-  }
+      response.data.on('data', (chunk) => {
+        if (connectionData.socket.readyState === WebSocket.OPEN && connectionData.twilioStreamSid) {
+          const audioBase64 = chunk.toString('base64');
+          const mediaMessage = JSON.stringify({
+            event: "media",
+            streamSid: connectionData.twilioStreamSid,
+            media: {
+              payload: audioBase64,
+            },
+          });
+          connectionData.socket.send(mediaMessage);
+        }
+      });
+
+      response.data.on('end', () => {
+        console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Finished streaming TTS for: "${textToSpeak}"`);
+        resolve();
+      });
+
+      response.data.on('error', (err) => {
+        console.error(`(ID: ${connectionId}) ElevenLabs stream error:`, err);
+        reject(err);
+      });
+
+    } catch (error) {
+      console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) ElevenLabs error:`, error.response ? error.response.data : error.message);
+      reject(error);
+    }
+  });
 }
 
 // --- WebSocket Server ---
@@ -183,6 +214,8 @@ wss.on('connection', (ws, req) => {
 
           const initialGreeting = `Hello! Let's talk about ${decodedTopic}. What are your initial thoughts on it?`;
           connectionData.conversationHistory.push({ role: "assistant", content: initialGreeting });
+          // Wait for the initial greeting to finish before we start listening.
+          // This prevents the AI from hearing its own voice and responding to it.
           await handleTTS(connectionId, initialGreeting);
           
           if (speechClient) {
