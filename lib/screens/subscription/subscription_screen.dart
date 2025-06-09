@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../services/subscription_service.dart';
+import '../../models/subscription_plan.dart';
+import '../../models/usage_tracking.dart';
 import '../../widgets/usage_display_widget.dart';
+import 'payment_screen.dart';
 
-class SubscriptionScreen extends StatelessWidget {
+class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
 
+  @override
+  State<SubscriptionScreen> createState() => _SubscriptionScreenState();
+}
+
+class _SubscriptionScreenState extends State<SubscriptionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -190,6 +200,9 @@ class SubscriptionScreen extends StatelessWidget {
     required Color color,
     bool isRecommended = false,
   }) {
+    // Extract plan type from plan name
+    final planType = planName.toLowerCase().contains('pro') ? 'pro' : 'premium';
+    
     return Container(
       decoration: BoxDecoration(
         border: Border.all(
@@ -271,33 +284,75 @@ class SubscriptionScreen extends StatelessWidget {
                   ),
                 )),
                 const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // TODO: Handle upgrade
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$planName upgrade coming soon!')),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: color,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                
+                // Monthly and Yearly Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _navigateToPayment(planType, false),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: color.withOpacity(0.1),
+                          foregroundColor: color,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(color: color),
+                          ),
+                        ),
+                        child: const Text(
+                          'Monthly',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
-                    child: Text(
-                      'Upgrade to $planName',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _navigateToPayment(planType, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: color,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'Yearly',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              'Save 25%',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+  
+  void _navigateToPayment(String planType, bool isYearly) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PaymentScreen(
+          planType: planType,
+          isYearly: isYearly,
+        ),
       ),
     );
   }

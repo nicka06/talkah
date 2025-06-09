@@ -22,36 +22,66 @@ Implement a complete subscription system with three tiers (Free, Pro, Premium) u
 - ✅ Created UsageDisplayWidget with progress bars
 - ✅ **TESTED & WORKING**: Usage limits enforced, exceptions thrown when at limit
 
+### ✅ STEP 1: Add Usage Display to App - **COMPLETED** ✅
+- ✅ Created dedicated SubscriptionScreen accessible from dashboard menu
+- ✅ Integrated UsageDisplayWidget showing current 1/1/1 usage with progress bars
+- ✅ Added navigation from Dashboard → Profile → Subscription
+- ✅ **TESTED & WORKING**: Beautiful usage display with billing period info
+
+### ✅ STEP 2: Create Upgrade Prompts - **COMPLETED** ✅
+- ✅ Created UsageLimitModal with beautiful gradient design
+- ✅ Shows when users hit limits with action-specific messaging
+- ✅ Displays Pro vs Premium upgrade options side-by-side
+- ✅ Handles screen overflow with scrolling and responsive design
+- ✅ **TESTED & WORKING**: Modal triggers on limit reached, guides to subscription screen
+
+### ✅ STEP 3: Build Subscription Management UI - **COMPLETED** ✅
+- ✅ Full SubscriptionScreen with current plan status
+- ✅ Usage progress bars with color-coded limits (red when at limit)
+- ✅ Detailed plan comparison (Pro: $8.99/mo, Premium: $14.99/mo)
+- ✅ Feature lists and upgrade buttons ready for Stripe integration
+- ✅ **TESTED & WORKING**: Complete subscription management interface
+
+### ✅ Integration: Smart Limit Enforcement - **COMPLETED** ✅
+- ✅ Dashboard buttons check limits before allowing actions
+- ✅ Phone/Text/Email buttons trigger upgrade modal when at limit
+- ✅ UsageLimitException handling with beautiful error messages
+- ✅ **TESTED & WORKING**: Click "Phone" → upgrade modal appears (1/1 limit reached!)
+
 ---
 
-## 🎯 **NEXT IMMEDIATE STEPS (Priority Order)**
+## 🎯 **NEXT: STRIPE INTEGRATION (Phase A-D)**
 
-### 🔥 **STEP 1: Add Usage Display to App** (30 minutes)
-**Goal**: Show users their current usage status
-- Add UsageDisplayWidget to home/dashboard screen
-- Test the display with current 1/1 phone call usage
-- Verify progress bars show correctly
+### 🔥 **PHASE A: Stripe Dashboard Setup** (NEXT - 30 minutes)
+**Goal**: Set up Stripe products, pricing, and webhooks
+1. **Access Stripe Dashboard** - Create/access Stripe account
+2. **Create Products**:
+   - Pro Plan: $8.99/month, $79.99/year
+   - Premium Plan: $14.99/month, $119.99/year
+3. **Get Price IDs** - Note down price_xxx IDs for each plan/interval
+4. **Configure Webhook** - Point to Supabase edge function
+5. **Environment Variables** - Add Stripe keys to Supabase
 
-### 🔥 **STEP 2: Create Upgrade Prompts** (1 hour)
-**Goal**: Guide users to upgrade when they hit limits
-- Create subscription upgrade modal/dialog
-- Trigger when UsageLimitException is caught
-- Show plan comparison with upgrade options
-- Add "Upgrade Plan" buttons throughout app
+### 🔥 **PHASE B: Flutter Stripe Integration** (2 hours)
+**Goal**: Add payment processing to Flutter app
+1. **Add Dependencies** - flutter_stripe, url_launcher
+2. **Create StripeService** - Handle checkout sessions and payments
+3. **Update Subscription Buttons** - Connect to real Stripe checkout
+4. **Payment Flow** - Stripe checkout → success → plan update
 
-### 🔥 **STEP 3: Build Subscription Management UI** (2 hours)
-**Goal**: Let users see plans and pricing
-- Create subscription management screen
-- Show current plan status
-- Display all available plans with features
-- Add monthly/yearly pricing toggle
+### 🔥 **PHASE C: Webhook Processing** (1.5 hours)  
+**Goal**: Handle Stripe events automatically
+1. **Create Edge Functions** - stripe-webhook handler
+2. **Process Events** - payment_succeeded, subscription_updated
+3. **Update Database** - Change user plans, reset usage limits
+4. **Test Webhooks** - Verify automatic plan changes
 
-### 🔥 **STEP 4: Stripe Integration** (4 hours)
-**Goal**: Enable actual payments and upgrades
-- Set up Stripe dashboard with products/prices
-- Add Flutter Stripe dependencies
-- Create checkout session functionality
-- Build payment flow integration
+### 🔥 **PHASE D: End-to-End Testing** (1 hour)
+**Goal**: Test complete payment flow
+1. **Test Cards** - Use Stripe test cards for payments
+2. **Verify Upgrades** - Confirm limits increase after payment
+3. **Test Webhooks** - Ensure automatic processing works
+4. **Error Handling** - Test failed payments and edge cases
 
 ---
 
@@ -167,162 +197,12 @@ dependencies:
 
 ---
 
-## 🏗️ Phase 5: Subscription Management UI
-
-### 5.1 Subscription Screen
-```dart
-// lib/screens/subscription/subscription_screen.dart
-class SubscriptionScreen extends StatefulWidget {
-  // Shows current plan, usage bars, available plans
-  // Upgrade/downgrade buttons
-  // Billing history
-}
-```
-
-### 5.2 Usage Limit Modal
-```dart
-// lib/widgets/usage_limit_modal.dart
-class UsageLimitModal extends StatelessWidget {
-  // Shown when user hits limits
-  // Shows current usage vs limits
-  // Upgrade options with pricing
-}
-```
-
-### 5.3 Plan Comparison Widget
-```dart
-// lib/widgets/plan_comparison.dart
-class PlanComparison extends StatelessWidget {
-  // Side-by-side plan comparison
-  // Feature checkmarks
-  // Pricing (monthly/yearly toggle)
-}
-```
-
----
-
-## 🏗️ Phase 6: Usage Tracking Integration
-
-### 6.1 Update API Service
-```dart
-// lib/services/api_service.dart
-class ApiService {
-  // Add before existing methods
-  static Future<bool> checkAndIncrementUsage(UsageType type)
-  static Future<UsageStats?> getUserUsage()
-  
-  // Update existing methods to check limits
-  static Future<Map<String, dynamic>?> initiateCall() {
-    if (!await checkAndIncrementUsage(UsageType.phoneCall)) {
-      throw UsageLimitException('Phone call limit reached');
-    }
-    // ... existing call logic
-  }
-}
-```
-
-### 6.2 Usage Exceptions
-```dart
-// lib/models/exceptions.dart
-class UsageLimitException implements Exception {
-  final String message;
-  final String planRequired;
-}
-```
-
----
-
-## 🏗️ Phase 7: Bloc State Management
-
-### 7.1 Subscription Bloc
-```dart
-// lib/blocs/subscription/subscription_bloc.dart
-class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionState> {
-  // Events: LoadSubscription, UpgradePlan, DowngradePlan, CancelSubscription
-  // States: SubscriptionLoading, SubscriptionLoaded, SubscriptionError
-}
-```
-
-### 7.2 Usage Bloc
-```dart
-// lib/blocs/usage/usage_bloc.dart
-class UsageBloc extends Bloc<UsageEvent, UsageState> {
-  // Events: LoadUsage, IncrementUsage, CheckLimit
-  // States: UsageLoading, UsageLoaded, UsageLimitReached
-}
-```
-
----
-
-## 🏗️ Phase 8: Integration Points
-
-### 8.1 Dashboard Updates
-- Add usage bars showing current usage vs limits
-- Add subscription status indicator
-- Link to subscription management
-
-### 8.2 Service Integration
-- Update voice call service to check limits
-- Update email service to check limits
-- Update text chat service to check limits
-
-### 8.3 Navigation Guards
-```dart
-// lib/guards/usage_guard.dart
-class UsageGuard {
-  static Future<bool> canUseService(UsageType type) {
-    // Check limits before allowing service access
-    // Show upgrade modal if limit reached
-  }
-}
-```
-
----
-
-## 🏗️ Phase 9: Testing & Validation
-
-### 9.1 Test Scenarios
-1. **Free Plan Limits**: Verify 1 call/email/text chain enforcement
-2. **Upgrade Flow**: Test immediate access to new limits
-3. **Downgrade Flow**: Test that limits apply after billing cycle
-4. **Payment Failures**: Test graceful handling
-5. **Usage Reset**: Test billing anniversary reset
-6. **Webhook Processing**: Test all Stripe events
-
-### 9.2 Edge Case Testing
-1. Multiple quick usage attempts
-2. Subscription changes during active usage
-3. Network failures during payment
-4. Webhook delivery failures
-
----
-
-## 🏗️ Phase 10: Production Deployment
-
-### 10.1 Stripe Production Setup
-1. Switch to production API keys
-2. Update webhook endpoints
-3. Configure production products/prices
-
-### 10.2 App Store Configuration
-1. Configure In-App Purchases
-2. Link Stripe products to App Store products
-3. Test App Store Review process
-
-### 10.3 Monitoring & Analytics
-1. Set up usage analytics
-2. Monitor subscription metrics
-3. Track conversion rates
-
----
-
-## 📝 Implementation Order
-1. **NEXT: Step 1-3** - UI Integration (Add usage display, upgrade prompts, subscription management)
-2. **Week 2**: Phase 2-3 - Stripe setup + Flutter dependencies  
-3. **Week 3**: Phase 5-6 - Complete subscription UI + Usage integration
-4. **Week 4**: Phase 7-8 - Bloc state management + Integration points
-5. **Week 5**: Phase 9 - Testing + Bug fixes
-6. **Week 6**: Phase 10 - Production deployment + App Store submission
+## 📝 Implementation Order - UPDATED
+1. ✅ **Steps 1-3** - UI Integration (COMPLETED - Usage display, upgrade prompts, subscription management)
+2. **🔥 NEXT: Phase A** - Stripe Dashboard Setup (30 minutes)
+3. **Phase B-D** - Flutter integration + Webhooks + Testing (4 hours)
+4. **Phase 9** - Production testing + Polish (1 hour)
+5. **Phase 10** - Production deployment + App Store (varies)
 
 ---
 
@@ -335,6 +215,6 @@ class UsageGuard {
 - **Unlimited = -1**: Use -1 in database to represent unlimited usage ✅ **IMPLEMENTED**
 
 ## 🎯 **CURRENT STATUS**: 
-**Database ✅ | Models ✅ | Services ✅ | Next: UI Integration**
+**Database ✅ | Models ✅ | Services ✅ | UI ✅ | Next: Stripe Integration**
 
-This plan ensures a robust, scalable subscription system that handles all edge cases while providing a smooth user experience.
+**READY FOR PAYMENTS!** 🚀 All foundation work complete. Users can see limits, get upgrade prompts, and navigate to beautiful subscription screen. Now we enable real payments!

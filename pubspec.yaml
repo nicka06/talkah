@@ -48,6 +48,9 @@ dependencies:
   # HTTP & API
   http: ^1.2.0
   
+  # Payments
+  flutter_stripe: ^11.1.0
+  
   # UI & Design
   flutter_svg: ^2.0.9
   google_fonts: ^6.1.0

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'config/supabase_config.dart';
+import 'services/stripe_payment_service.dart';
 import 'blocs/auth/auth_bloc.dart';
 import 'blocs/auth/auth_event.dart';
 import 'blocs/auth/auth_state.dart';
@@ -35,6 +36,9 @@ void main() async {
   
   // Initialize Supabase
   await SupabaseConfig.initialize();
+  
+  // Initialize Stripe
+  await StripePaymentService.init();
   
   runApp(const MyApp());
 }
