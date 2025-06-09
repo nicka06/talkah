@@ -1,12 +1,26 @@
+// @ts-nocheck
+// @ts-ignore: Deno types
+declare const Deno: any;
+
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// @ts-ignore
+import Twilio from 'https://esm.sh/twilio?target=deno';
 
 // @ts-ignore
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 // @ts-ignore
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+// @ts-ignore
+const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID")!;
+// @ts-ignore
+const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
+// @ts-ignore
+const YOUR_TWILIO_PHONE_NUMBER = Deno.env.get("YOUR_TWILIO_PHONE_NUMBER")!;
+// @ts-ignore
+const TWILIO_MESSAGING_SERVICE_SID = Deno.env.get("TWILIO_MESSAGING_SERVICE_SID")!;
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -40,7 +54,6 @@ serve(async (req: Request) => {
       }
     });
 
-    // Get authenticated user
     // @ts-ignore
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -50,10 +63,10 @@ serve(async (req: Request) => {
       });
     }
 
-    // Parse request body
-    const { topic } = await req.json();
-    if (!topic) {
-      return new Response(JSON.stringify({ error: 'Topic is required' }), {
+    const { phone_number, message_text } = await req.json();
+    
+    if (!phone_number || !message_text) {
+      return new Response(JSON.stringify({ error: 'phone_number and message_text are required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -67,7 +80,6 @@ serve(async (req: Request) => {
     // @ts-ignore
     const usage = usageData[0] || { calls_used: 0, texts_used: 0, emails_used: 0, tier: 'free' };
     
-    // Check if user can start a new text conversation
     const limits = {
       free: { texts: 1 },
       pro: { texts: 10 },
@@ -78,7 +90,7 @@ serve(async (req: Request) => {
     const tierLimit = limits[usage.tier as keyof typeof limits]?.texts || 1;
     if (tierLimit !== -1 && usage.texts_used >= tierLimit) {
       return new Response(JSON.stringify({ 
-        error: 'Text conversation limit reached',
+        error: 'SMS limit reached',
         usage_limit_reached: true 
       }), {
         status: 403,
@@ -86,40 +98,55 @@ serve(async (req: Request) => {
       });
     }
 
-    // Create new text conversation
-    // @ts-ignore
-    const { data: conversation, error: createError } = await supabase
-      .from('text_conversations')
-      .insert({
-        user_id: user.id,
-        topic: topic,
-        conversation_history: []
-      })
-      .select()
-      .single();
+    // Initialize Twilio client
+    const twilioClient = new Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
-    if (createError) {
-      console.error('Create conversation error:', createError);
-      return new Response(JSON.stringify({ error: 'Failed to create conversation' }), {
+    // Send SMS message via Twilio
+    try {
+      const twilioMessage = await twilioClient.messages.create({
+        body: message_text,
+        messagingServiceSid: TWILIO_MESSAGING_SERVICE_SID,
+        to: phone_number
+      });
+
+      // Save the sent message to database
+      // @ts-ignore
+      await supabase
+        .from('sms_messages')
+        .insert({
+          user_id: user.id,
+          phone_number: phone_number,
+          twilio_message_sid: twilioMessage.sid,
+          direction: 'outbound',
+          message_text: message_text,
+          type: 'single',
+          status: 'sent'
+        });
+
+      console.log(`Single SMS sent successfully. SID: ${twilioMessage.sid}`);
+
+      // Increment usage
+      // @ts-ignore
+      await supabase.rpc('increment_usage', { 
+        user_uuid: user.id, 
+        usage_type: 'texts' 
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        message_sid: twilioMessage.sid,
+        message: 'SMS sent successfully'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+    } catch (twilioError) {
+      console.error('Twilio SMS error:', twilioError);
+      return new Response(JSON.stringify({ error: 'Failed to send SMS' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-
-    // Increment usage
-    // @ts-ignore
-    await supabase.rpc('increment_usage', { 
-      user_uuid: user.id, 
-      usage_type: 'texts' 
-    });
-
-    return new Response(JSON.stringify({
-      success: true,
-      conversation_id: conversation.id,
-      topic: conversation.topic
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
 
   } catch (error) {
     console.error('Error:', error);
@@ -128,4 +155,4 @@ serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-});
+}); 

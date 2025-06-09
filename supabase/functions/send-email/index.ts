@@ -12,7 +12,7 @@ const SENDGRID_API_KEY = Deno.env.get("SENDGRID_API_KEY")!;
 // @ts-ignore
 const SENDGRID_FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL")!;
 // @ts-ignore
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+const OPENAI_API_KEY = Deno.env.get("OpenAI_Key")!;
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -55,7 +55,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const { recipient_email, subject, content, type, topic } = await req.json();
+    const { recipient_email, subject, content, type, topic, from_email } = await req.json();
     
     if (!recipient_email || !subject) {
       return new Response(JSON.stringify({ error: 'recipient_email and subject are required' }), {
@@ -63,6 +63,9 @@ serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+
+    // Use custom from email or default
+    const fromEmail = from_email || SENDGRID_FROM_EMAIL;
 
     // Check usage limits
     // @ts-ignore
@@ -149,7 +152,7 @@ serve(async (req: Request) => {
           to: [{ email: recipient_email }],
           subject: subject
         }],
-        from: { email: SENDGRID_FROM_EMAIL },
+        from: { email: fromEmail },
         content: [{
           type: 'text/plain',
           value: emailContent
@@ -183,6 +186,7 @@ serve(async (req: Request) => {
         type: type || 'custom',
         topic,
         status,
+        // from_email: fromEmail, // Temporarily commented out for testing
         // @ts-ignore
         sendgrid_message_id: sendgridMessageId
       })

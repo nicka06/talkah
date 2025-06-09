@@ -329,14 +329,18 @@ entrypoint = "./functions/initiate-call/index.ts"
 enabled = true
 verify_jwt = true
 
-[functions.initiate-text-chat]
+[functions.initiate-sms-conversation]
 enabled = true
 verify_jwt = true
 
-[functions.send-text-message]
+[functions.send-single-sms]
 enabled = true
 verify_jwt = true
 
 [functions.send-email]
 enabled = true
 verify_jwt = true
+
+[functions.twilio-sms-webhook]
+enabled = true
+verify_jwt = false

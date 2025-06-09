@@ -7,6 +7,9 @@ import '../../services/api_service.dart';
 import '../../widgets/usage_limit_modal.dart';
 import '../account/account_info_screen.dart';
 import '../subscription/subscription_screen.dart';
+import '../phone/call_history_screen.dart';
+import '../phone/phone_number_screen.dart';
+import '../email/email_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -79,16 +82,6 @@ class DashboardScreen extends StatelessWidget {
                       label: 'Phone',
                       color: Theme.of(context).colorScheme.primary,
                       onTap: () => _handlePhoneCall(context),
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    _buildActionButton(
-                      context: context,
-                      icon: Icons.chat_bubble_outline,
-                      label: 'Messages',
-                      color: Theme.of(context).colorScheme.secondary,
-                      onTap: () => _handleTextChat(context),
                     ),
                     
                     const SizedBox(height: 12),
@@ -192,6 +185,24 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
         PopupMenuItem<String>(
+          value: 'call_history',
+          child: Row(
+            children: [
+              Icon(
+                Icons.history,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Call History',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
           value: 'subscription',
           child: Row(
             children: [
@@ -249,6 +260,13 @@ class DashboardScreen extends StatelessWidget {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => const AccountInfoScreen(),
+              ),
+            );
+            break;
+          case 'call_history':
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const CallHistoryScreen(),
               ),
             );
             break;
@@ -350,43 +368,11 @@ class DashboardScreen extends StatelessWidget {
         return;
       }
       
-      // TODO: Navigate to actual phone call screen
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone call feature ready! (Check limits passed)')),
-      );
-    } catch (e) {
-      if (e is UsageLimitException) {
-        UsageLimitModal.show(
-          context: context,
-          actionType: e.actionType,
-          message: e.message,
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
-  // Handle text chat action
-  void _handleTextChat(BuildContext context) async {
-    try {
-      // Check if user can start a text chat before proceeding
-      final canStartText = await ApiService.canStartTextChat();
-      if (!canStartText) {
-        // Show upgrade modal directly if at limit
-        UsageLimitModal.show(
-          context: context,
-          actionType: 'text_chain',
-          message: 'You have reached your text conversation limit for this billing period. Please upgrade your plan to start more conversations.',
-        );
-        return;
-      }
-      
-      // TODO: Navigate to actual text chat screen
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Text chat feature ready! (Check limits passed)')),
+      // Navigate to phone number screen
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const PhoneNumberScreen(),
+        ),
       );
     } catch (e) {
       if (e is UsageLimitException) {
@@ -418,9 +404,11 @@ class DashboardScreen extends StatelessWidget {
         return;
       }
       
-      // TODO: Navigate to actual email screen
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email feature ready! (Check limits passed)')),
+      // Navigate to email screen
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const EmailScreen(),
+        ),
       );
     } catch (e) {
       if (e is UsageLimitException) {

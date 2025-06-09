@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../config/supabase_config.dart';
 import '../models/usage_model.dart';
-import '../models/text_conversation_model.dart';
+import '../models/call_record.dart';
 import './subscription_service.dart';
 
 // Exception class for usage limit errors
@@ -96,65 +96,83 @@ class ApiService {
     }
   }
 
-  // Start text conversation with usage checking
-  static Future<String?> initiateTextChat({required String topic}) async {
+  // Initiate SMS conversation with AI (multiple exchanges)
+  static Future<Map<String, dynamic>?> initiateSmsConversation({
+    required String phoneNumber,
+    required String topic,
+    required int messageCount,
+  }) async {
     try {
-      // Check if user can start a text conversation
-      final canStartText = await _subscriptionService.canPerformAction('text_chain');
-      if (!canStartText) {
+      // Check if user can start an SMS conversation
+      final canStartSms = await _subscriptionService.canPerformAction('text_chain');
+      if (!canStartSms) {
         throw UsageLimitException(
-          'You have reached your text conversation limit for this billing period. Please upgrade your plan to start more conversations.',
+          'You have reached your SMS conversation limit for this billing period. Please upgrade your plan to start more conversations.',
           'text_chain'
         );
       }
 
       final headers = await _getHeaders();
       final response = await http.post(
-        Uri.parse('$_baseUrl/initiate-text-chat'),
+        Uri.parse('$_baseUrl/initiate-sms-conversation'),
         headers: headers,
-        body: json.encode({'topic': topic}),
+        body: json.encode({
+          'phone_number': phoneNumber,
+          'topic': topic,
+          'message_count': messageCount,
+        }),
       );
 
       if (response.statusCode == 200) {
-        // Increment text chain usage after successful chat start
+        // Increment SMS usage after successful initiation
         await _subscriptionService.incrementUsage('text_chain');
-        final data = json.decode(response.body);
-        return data['conversation_id'];
+        return json.decode(response.body);
       } else {
-        print('Error starting text chat: ${response.body}');
+        print('Error initiating SMS conversation: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('Error starting text chat: $e');
+      print('Error initiating SMS conversation: $e');
       rethrow; // Re-throw so UI can handle UsageLimitException
     }
   }
 
-  // Send text message and get AI response
-  static Future<Map<String, dynamic>?> sendTextMessage({
-    required String conversationId,
+  // Send single SMS message
+  static Future<Map<String, dynamic>?> sendSingleSms({
+    required String phoneNumber,
     required String message,
   }) async {
     try {
+      // Check if user can send an SMS
+      final canSendSms = await _subscriptionService.canPerformAction('text_chain');
+      if (!canSendSms) {
+        throw UsageLimitException(
+          'You have reached your SMS limit for this billing period. Please upgrade your plan to send more messages.',
+          'text_chain'
+        );
+      }
+
       final headers = await _getHeaders();
       final response = await http.post(
-        Uri.parse('$_baseUrl/send-text-message'),
+        Uri.parse('$_baseUrl/send-single-sms'),
         headers: headers,
         body: json.encode({
-          'conversation_id': conversationId,
+          'phone_number': phoneNumber,
           'message': message,
         }),
       );
 
       if (response.statusCode == 200) {
+        // Increment SMS usage after successful send
+        await _subscriptionService.incrementUsage('text_chain');
         return json.decode(response.body);
       } else {
-        print('Error sending message: ${response.body}');
+        print('Error sending SMS: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('Error sending message: $e');
-      return null;
+      print('Error sending SMS: $e');
+      rethrow; // Re-throw so UI can handle UsageLimitException
     }
   }
 
@@ -165,6 +183,7 @@ class ApiService {
     String? content,
     String? type,
     String? topic,
+    String? fromEmail,
   }) async {
     try {
       // Check if user can send an email
@@ -185,6 +204,7 @@ class ApiService {
       if (content != null) body['content'] = content;
       if (type != null) body['type'] = type;
       if (topic != null) body['topic'] = topic;
+      if (fromEmail != null) body['from_email'] = fromEmail;
 
       final response = await http.post(
         Uri.parse('$_baseUrl/send-email'),
@@ -316,5 +336,43 @@ class ApiService {
 
   static Future<bool> canSendEmail() async {
     return await _subscriptionService.canPerformAction('email');
+  }
+
+  // Get call history for current user
+  static Future<List<CallRecord>> getCallHistory({int limit = 50, int offset = 0}) async {
+    try {
+      final userId = SupabaseConfig.auth.currentUser?.id;
+      if (userId == null) {
+        print('No authenticated user');
+        return [];
+      }
+
+      // Query calls table directly using Supabase client
+      final response = await SupabaseConfig.client
+          .from('calls')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(limit)
+          .range(offset, offset + limit - 1);
+
+      if (response == null) return [];
+
+      return (response as List<dynamic>)
+          .map((json) => CallRecord.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error getting call history: $e');
+      return [];
+    }
+  }
+
+  // Re-call with same topic (for call history screen)
+  static Future<Map<String, dynamic>?> redialCall({
+    required String phoneNumber,
+    required String topic,
+  }) async {
+    // Use the same initiate call method
+    return await initiateCall(phoneNumber: phoneNumber, topic: topic);
   }
 } 
