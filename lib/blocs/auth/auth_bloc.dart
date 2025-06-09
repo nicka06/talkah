@@ -3,18 +3,31 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../../config/supabase_config.dart';
 import '../../models/user_model.dart';
+import '../../models/app_error.dart';
+import '../../services/error_handler_service.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   late StreamSubscription<AuthState> _authStateSubscription;
+  final ErrorHandlerService _errorHandler = ErrorHandlerService();
 
   AuthBloc() : super(AuthInitial()) {
+    if (kDebugMode) {
+      debugPrint('🏗️ AuthBloc: Constructor - setting up auth stream...');
+    }
+    
     // Listen to auth state changes
     _authStateSubscription = _authStateChangeStream().listen(
-      (authState) => add(AuthUserUpdated(
-        userId: authState is AuthAuthenticated ? authState.user.id : null,
-      )),
+      (authState) {
+        if (kDebugMode) {
+          debugPrint('🌊 AuthBloc: Auth stream triggered: ${authState.runtimeType}');
+        }
+        add(AuthUserUpdated(
+          userId: authState is AuthAuthenticated ? authState.user.id : null,
+        ));
+      },
     );
 
     on<AuthCheckRequested>(_onAuthCheckRequested);
@@ -26,6 +39,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Stream<AuthState> _authStateChangeStream() {
     return SupabaseConfig.auth.onAuthStateChange.map((data) {
+      if (kDebugMode) {
+        debugPrint('🔄 AuthBloc: Supabase auth change: ${data.event}');
+        debugPrint('   Session exists: ${data.session != null}');
+      }
+      
       final session = data.session;
       if (session != null) {
         return AuthAuthenticated(
@@ -65,7 +83,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthUnauthenticated());
       }
     } catch (e) {
-      emit(AuthError(message: 'Failed to check authentication status'));
+      final error = _errorHandler.handleException(e, 'Checking authentication status');
+      emit(AuthError(error: error));
     }
   }
 
@@ -73,15 +92,33 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLoginRequested event,
     Emitter<AuthState> emit,
   ) async {
+    if (kDebugMode) {
+      debugPrint('🔐 AuthBloc: Login requested for ${event.email}');
+    }
+    
     emit(AuthLoading());
     
     try {
+      if (kDebugMode) {
+        debugPrint('🔐 AuthBloc: Calling signInWithPassword...');
+      }
+      
       final response = await SupabaseConfig.auth.signInWithPassword(
         email: event.email,
         password: event.password,
       );
 
+      if (kDebugMode) {
+        debugPrint('🔐 AuthBloc: signInWithPassword completed');
+        debugPrint('   User: ${response.user?.id}');
+        debugPrint('   Session: ${response.session?.accessToken != null}');
+      }
+
       if (response.user != null) {
+        if (kDebugMode) {
+          debugPrint('🔐 AuthBloc: User exists, fetching profile...');
+        }
+        
         // Fetch full user profile from database
         final userResponse = await SupabaseConfig.client
             .from('users')
@@ -90,12 +127,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             .single();
 
         final user = UserModel.fromJson(userResponse);
+        
+        if (kDebugMode) {
+          debugPrint('🔐 AuthBloc: Emitting AuthAuthenticated');
+        }
+        
         emit(AuthAuthenticated(user: user));
       } else {
-        emit(AuthError(message: 'Login failed'));
+        if (kDebugMode) {
+          debugPrint('🔐 AuthBloc: User is null, emitting error');
+        }
+        
+        final error = AppError.authentication(details: 'Login response was null');
+        _errorHandler.logError(error);
+        emit(AuthError(error: error));
       }
     } catch (e) {
-      emit(AuthError(message: e.toString()));
+      if (kDebugMode) {
+        debugPrint('🔐 AuthBloc: Exception caught in login: $e');
+        debugPrint('   Exception type: ${e.runtimeType}');
+      }
+      
+      final error = _errorHandler.handleException(e, 'Signing in user');
+      
+      if (kDebugMode) {
+        debugPrint('🔐 AuthBloc: Emitting AuthError: ${error.title}');
+      }
+      
+      emit(AuthError(error: error));
+      
+      if (kDebugMode) {
+        debugPrint('🔐 AuthBloc: AuthError emitted successfully');
+      }
     }
   }
 
@@ -126,10 +189,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final user = UserModel.fromJson(userResponse);
         emit(AuthAuthenticated(user: user));
       } else {
-        emit(AuthError(message: 'Signup failed'));
+        final error = AppError.authentication(details: 'Signup response was null');
+        _errorHandler.logError(error);
+        emit(AuthError(error: error));
       }
     } catch (e) {
-      emit(AuthError(message: e.toString()));
+      final error = _errorHandler.handleException(e, 'Signing up user');
+      emit(AuthError(error: error));
     }
   }
 
@@ -141,7 +207,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await SupabaseConfig.auth.signOut();
       emit(AuthUnauthenticated());
     } catch (e) {
-      emit(AuthError(message: 'Logout failed'));
+      final error = _errorHandler.handleException(e, 'Signing out user');
+      emit(AuthError(error: error));
     }
   }
 
@@ -149,8 +216,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthUserUpdated event,
     Emitter<AuthState> emit,
   ) async {
+    if (kDebugMode) {
+      debugPrint('👤 AuthBloc: AuthUserUpdated triggered');
+      debugPrint('   User ID: ${event.userId}');
+    }
+    
     if (event.userId != null) {
       try {
+        if (kDebugMode) {
+          debugPrint('👤 AuthBloc: Fetching user data for ${event.userId}');
+        }
+        
         final userResponse = await SupabaseConfig.client
             .from('users')
             .select()
@@ -158,11 +234,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             .single();
 
         final user = UserModel.fromJson(userResponse);
+        
+        if (kDebugMode) {
+          debugPrint('👤 AuthBloc: Emitting AuthAuthenticated from user update');
+        }
+        
         emit(AuthAuthenticated(user: user));
       } catch (e) {
-        emit(AuthError(message: 'Failed to fetch user data'));
+        if (kDebugMode) {
+          debugPrint('👤 AuthBloc: Error in AuthUserUpdated: $e');
+        }
+        
+        final error = _errorHandler.handleException(e, 'Fetching updated user data');
+        emit(AuthError(error: error));
       }
     } else {
+      if (kDebugMode) {
+        debugPrint('👤 AuthBloc: No user ID, emitting AuthUnauthenticated');
+      }
+      
       emit(AuthUnauthenticated());
     }
   }

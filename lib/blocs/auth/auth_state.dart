@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../models/user_model.dart';
+import '../../models/app_error.dart';
 
 abstract class AuthState extends Equatable {
   const AuthState();
@@ -24,10 +25,10 @@ class AuthAuthenticated extends AuthState {
 class AuthUnauthenticated extends AuthState {}
 
 class AuthError extends AuthState {
-  final String message;
+  final AppError error;
 
-  const AuthError({required this.message});
+  const AuthError({required this.error});
 
   @override
-  List<Object> get props => [message];
+  List<Object> get props => [error];
 } 

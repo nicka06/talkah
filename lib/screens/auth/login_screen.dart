@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
+import '../../models/app_error.dart';
+import '../../widgets/error_display_widget.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,14 +31,30 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: BlocListener<AuthBloc, AuthState>(
+        listenWhen: (previous, current) {
+          if (kDebugMode) {
+            debugPrint('🎭 LOGIN BlocListener.listenWhen: ${previous.runtimeType} -> ${current.runtimeType}');
+          }
+          return true; // Listen to all state changes for debugging
+        },
         listener: (context, state) {
+          if (kDebugMode) {
+            debugPrint('🎪 LOGIN BlocListener triggered: ${state.runtimeType}');
+          }
+          
           if (state is AuthError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
-            );
+            if (kDebugMode) {
+              debugPrint('🚨 LOGIN detected AuthError: ${state.error.title}');
+              debugPrint('   Context: $context');
+              debugPrint('   Context mounted: ${context.mounted}');
+            }
+            
+            // Show clean notification popup
+            ErrorDisplayWidget.showNotification(context, state.error);
+            
+            if (kDebugMode) {
+              debugPrint('✅ LOGIN called showNotification');
+            }
           }
         },
         child: SafeArea(

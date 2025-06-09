@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'config/supabase_config.dart';
 import 'blocs/auth/auth_bloc.dart';
@@ -10,8 +11,27 @@ import 'screens/auth/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 
+// Debug observer to track all bloc state changes
+class DebugBlocObserver extends BlocObserver {
+  @override
+  void onChange(BlocBase bloc, Change change) {
+    super.onChange(bloc, change);
+    if (kDebugMode) {
+      debugPrint('🔀 BLOC CHANGE: ${change.currentState.runtimeType} -> ${change.nextState.runtimeType}');
+      if (change.nextState.runtimeType.toString().contains('AuthError')) {
+        debugPrint('   ⚠️ AuthError state detected!');
+      }
+    }
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Set up bloc observer for debugging
+  if (kDebugMode) {
+    Bloc.observer = DebugBlocObserver();
+  }
   
   // Initialize Supabase
   await SupabaseConfig.initialize();
@@ -50,11 +70,19 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         home: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) {
-            if (state is AuthInitial || state is AuthLoading) {
+            if (kDebugMode) {
+              debugPrint('🏠 MAIN BlocBuilder: Building for state ${state.runtimeType}');
+            }
+            
+            if (state is AuthInitial) {
+              // Only show splash on app startup
               return const SplashScreen();
             } else if (state is AuthAuthenticated) {
+              // Only navigate to dashboard when actually authenticated
               return const DashboardScreen();
             } else {
+              // Stay on LoginScreen for AuthLoading, AuthError, AuthUnauthenticated
+              // This allows the LoginScreen to handle its own loading states and errors
               return const LoginScreen();
             }
           },
