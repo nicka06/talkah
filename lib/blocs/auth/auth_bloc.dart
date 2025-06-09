@@ -5,6 +5,7 @@ import '../../config/supabase_config.dart';
 import '../../models/user_model.dart';
 import '../../models/app_error.dart';
 import '../../services/error_handler_service.dart';
+import '../../services/api_service.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 import 'package:flutter/foundation.dart';
@@ -35,6 +36,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignupRequested>(_onAuthSignupRequested);
     on<AuthLogoutRequested>(_onAuthLogoutRequested);
     on<AuthUserUpdated>(_onAuthUserUpdated);
+    on<AuthUpdateEmailRequested>(_onAuthUpdateEmailRequested);
+    on<AuthUpdatePasswordRequested>(_onAuthUpdatePasswordRequested);
   }
 
   Stream<AuthState> _authStateChangeStream() {
@@ -261,5 +264,62 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> close() {
     _authStateSubscription.cancel();
     return super.close();
+  }
+
+  Future<void> _onAuthUpdateEmailRequested(
+    AuthUpdateEmailRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! AuthAuthenticated) return;
+    
+    emit(AuthUpdating(user: currentState.user));
+    
+    try {
+      final success = await ApiService.updateUserEmail(newEmail: event.newEmail);
+      
+      if (success) {
+        // Refresh user data from the database
+        final userResponse = await SupabaseConfig.client
+            .from('users')
+            .select()
+            .eq('id', currentState.user.id)
+            .single();
+
+        final updatedUser = UserModel.fromJson(userResponse);
+        emit(AuthAuthenticated(user: updatedUser));
+      } else {
+        final error = AppError.authentication(details: 'Failed to update email');
+        emit(AuthError(error: error));
+      }
+    } catch (e) {
+      final error = _errorHandler.handleException(e, 'Updating user email');
+      emit(AuthError(error: error));
+    }
+  }
+
+  Future<void> _onAuthUpdatePasswordRequested(
+    AuthUpdatePasswordRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! AuthAuthenticated) return;
+    
+    emit(AuthUpdating(user: currentState.user));
+    
+    try {
+      final success = await ApiService.updateUserPassword(newPassword: event.newPassword);
+      
+      if (success) {
+        // Password update successful, return to authenticated state
+        emit(AuthAuthenticated(user: currentState.user));
+      } else {
+        final error = AppError.authentication(details: 'Failed to update password');
+        emit(AuthError(error: error));
+      }
+    } catch (e) {
+      final error = _errorHandler.handleException(e, 'Updating user password');
+      emit(AuthError(error: error));
+    }
   }
 } 

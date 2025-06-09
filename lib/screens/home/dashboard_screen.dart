@@ -3,6 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
+import '../../services/api_service.dart';
+import '../../widgets/usage_limit_modal.dart';
+import '../account/account_info_screen.dart';
+import '../subscription/subscription_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -74,12 +78,7 @@ class DashboardScreen extends StatelessWidget {
                       icon: Icons.phone_outlined,
                       label: 'Phone',
                       color: Theme.of(context).colorScheme.primary,
-                      onTap: () {
-                        // TODO: Navigate to call screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Voice calls coming soon!')),
-                        );
-                      },
+                      onTap: () => _handlePhoneCall(context),
                     ),
                     
                     const SizedBox(height: 12),
@@ -89,12 +88,7 @@ class DashboardScreen extends StatelessWidget {
                       icon: Icons.chat_bubble_outline,
                       label: 'Messages',
                       color: Theme.of(context).colorScheme.secondary,
-                      onTap: () {
-                        // TODO: Navigate to message screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Text chat coming soon!')),
-                        );
-                      },
+                      onTap: () => _handleTextChat(context),
                     ),
                     
                     const SizedBox(height: 12),
@@ -104,12 +98,7 @@ class DashboardScreen extends StatelessWidget {
                       icon: Icons.email_outlined,
                       label: 'Email',
                       color: Theme.of(context).colorScheme.tertiary,
-                      onTap: () {
-                        // TODO: Navigate to email screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Email service coming soon!')),
-                        );
-                      },
+                      onTap: () => _handleEmail(context),
                     ),
                   ],
                 ),
@@ -257,15 +246,17 @@ class DashboardScreen extends StatelessWidget {
       onSelected: (String value) {
         switch (value) {
           case 'account':
-            // TODO: Navigate to account info screen
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Account info coming soon!')),
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const AccountInfoScreen(),
+              ),
             );
             break;
           case 'subscription':
-            // TODO: Navigate to subscription management screen
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Subscription management coming soon!')),
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const SubscriptionScreen(),
+              ),
             );
             break;
           case 'signout':
@@ -342,5 +333,107 @@ class DashboardScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Handle phone call action
+  void _handlePhoneCall(BuildContext context) async {
+    try {
+      // Check if user can make a call before proceeding
+      final canMakeCall = await ApiService.canMakePhoneCall();
+      if (!canMakeCall) {
+        // Show upgrade modal directly if at limit
+        UsageLimitModal.show(
+          context: context,
+          actionType: 'phone_call',
+          message: 'You have reached your phone call limit for this billing period. Please upgrade your plan to make more calls.',
+        );
+        return;
+      }
+      
+      // TODO: Navigate to actual phone call screen
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Phone call feature ready! (Check limits passed)')),
+      );
+    } catch (e) {
+      if (e is UsageLimitException) {
+        UsageLimitModal.show(
+          context: context,
+          actionType: e.actionType,
+          message: e.message,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  // Handle text chat action
+  void _handleTextChat(BuildContext context) async {
+    try {
+      // Check if user can start a text chat before proceeding
+      final canStartText = await ApiService.canStartTextChat();
+      if (!canStartText) {
+        // Show upgrade modal directly if at limit
+        UsageLimitModal.show(
+          context: context,
+          actionType: 'text_chain',
+          message: 'You have reached your text conversation limit for this billing period. Please upgrade your plan to start more conversations.',
+        );
+        return;
+      }
+      
+      // TODO: Navigate to actual text chat screen
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Text chat feature ready! (Check limits passed)')),
+      );
+    } catch (e) {
+      if (e is UsageLimitException) {
+        UsageLimitModal.show(
+          context: context,
+          actionType: e.actionType,
+          message: e.message,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  // Handle email action
+  void _handleEmail(BuildContext context) async {
+    try {
+      // Check if user can send an email before proceeding
+      final canSendEmail = await ApiService.canSendEmail();
+      if (!canSendEmail) {
+        // Show upgrade modal directly if at limit
+        UsageLimitModal.show(
+          context: context,
+          actionType: 'email',
+          message: 'You have reached your email limit for this billing period. Please upgrade your plan to send more emails.',
+        );
+        return;
+      }
+      
+      // TODO: Navigate to actual email screen
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email feature ready! (Check limits passed)')),
+      );
+    } catch (e) {
+      if (e is UsageLimitException) {
+        UsageLimitModal.show(
+          context: context,
+          actionType: e.actionType,
+          message: e.message,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 } 

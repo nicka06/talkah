@@ -44,4 +44,22 @@ class AuthUserUpdated extends AuthEvent {
 
   @override
   List<Object?> get props => [userId];
+}
+
+class AuthUpdateEmailRequested extends AuthEvent {
+  final String newEmail;
+
+  const AuthUpdateEmailRequested({required this.newEmail});
+
+  @override
+  List<Object> get props => [newEmail];
+}
+
+class AuthUpdatePasswordRequested extends AuthEvent {
+  final String newPassword;
+
+  const AuthUpdatePasswordRequested({required this.newPassword});
+
+  @override
+  List<Object> get props => [newPassword];
 } 

@@ -31,4 +31,13 @@ class AuthError extends AuthState {
 
   @override
   List<Object> get props => [error];
+}
+
+class AuthUpdating extends AuthState {
+  final UserModel user;
+
+  const AuthUpdating({required this.user});
+
+  @override
+  List<Object> get props => [user];
 } 
