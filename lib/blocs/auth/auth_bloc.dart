@@ -6,6 +6,7 @@ import '../../models/user_model.dart';
 import '../../models/app_error.dart';
 import '../../services/error_handler_service.dart';
 import '../../services/api_service.dart';
+import '../../services/oauth_service.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 import 'package:flutter/foundation.dart';
@@ -38,6 +39,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthUserUpdated>(_onAuthUserUpdated);
     on<AuthUpdateEmailRequested>(_onAuthUpdateEmailRequested);
     on<AuthUpdatePasswordRequested>(_onAuthUpdatePasswordRequested);
+    on<AuthGoogleSignInRequested>(_onAuthGoogleSignInRequested);
+    on<AuthAppleSignInRequested>(_onAuthAppleSignInRequested);
   }
 
   Stream<AuthState> _authStateChangeStream() {
@@ -207,6 +210,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     try {
+      // Sign out from OAuth providers first
+      await OAuthService.signOutGoogle();
+      
+      // Then sign out from Supabase
       await SupabaseConfig.auth.signOut();
       emit(AuthUnauthenticated());
     } catch (e) {
@@ -319,6 +326,180 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
     } catch (e) {
       final error = _errorHandler.handleException(e, 'Updating user password');
+      emit(AuthError(error: error));
+    }
+  }
+
+  Future<void> _onAuthGoogleSignInRequested(
+    AuthGoogleSignInRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (kDebugMode) {
+      debugPrint('🔐 AuthBloc: Google sign-in requested');
+    }
+    
+    emit(AuthLoading());
+    
+    try {
+      final response = await OAuthService.signInWithGoogle();
+      
+      if (response?.user != null) {
+        final authUser = response!.user!;
+        
+        if (kDebugMode) {
+          debugPrint('🔐 AuthBloc: Google sign-in successful, user: ${authUser.id}');
+        }
+        
+        // Wait a moment for Supabase triggers to complete
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        // Try to fetch user profile from database
+        try {
+          final userResponse = await SupabaseConfig.client
+              .from('users')
+              .select()
+              .eq('id', authUser.id)
+              .maybeSingle(); // Use maybeSingle to handle case where user doesn't exist
+
+          if (userResponse != null) {
+            // User exists in database
+            final user = UserModel.fromJson(userResponse);
+            emit(AuthAuthenticated(user: user));
+          } else {
+            // User doesn't exist in database yet, create one
+            if (kDebugMode) {
+              debugPrint('🔐 AuthBloc: User profile not found, creating new profile');
+            }
+            
+            final user = UserModel(
+              id: authUser.id,
+              email: authUser.email ?? '',
+              subscriptionTier: 'free',
+              createdAt: DateTime.parse(authUser.createdAt),
+              updatedAt: DateTime.now(),
+            );
+            
+            // Insert user into database
+            await SupabaseConfig.client.from('users').insert(user.toJson());
+            
+            emit(AuthAuthenticated(user: user));
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('🔐 AuthBloc: Error fetching/creating user profile: $e');
+          }
+          
+          // Fallback: create minimal user model from auth data
+          final user = UserModel(
+            id: authUser.id,
+            email: authUser.email ?? '',
+            subscriptionTier: 'free',
+            createdAt: DateTime.parse(authUser.createdAt),
+            updatedAt: DateTime.now(),
+          );
+          
+          emit(AuthAuthenticated(user: user));
+        }
+      } else {
+        if (kDebugMode) {
+          debugPrint('🔐 AuthBloc: Google sign-in cancelled by user');
+        }
+        // User cancelled sign-in, return to unauthenticated state
+        emit(AuthUnauthenticated());
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('🔐 AuthBloc: Google sign-in error: $e');
+      }
+      
+      final error = _errorHandler.handleException(e, 'Google sign-in');
+      emit(AuthError(error: error));
+    }
+  }
+
+  Future<void> _onAuthAppleSignInRequested(
+    AuthAppleSignInRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (kDebugMode) {
+      debugPrint('🔐 AuthBloc: Apple sign-in requested');
+    }
+    
+    emit(AuthLoading());
+    
+    try {
+      final response = await OAuthService.signInWithApple();
+      
+      if (response?.user != null) {
+        final authUser = response!.user!;
+        
+        if (kDebugMode) {
+          debugPrint('🔐 AuthBloc: Apple sign-in successful, user: ${authUser.id}');
+        }
+        
+        // Wait a moment for Supabase triggers to complete
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        // Try to fetch user profile from database
+        try {
+          final userResponse = await SupabaseConfig.client
+              .from('users')
+              .select()
+              .eq('id', authUser.id)
+              .maybeSingle(); // Use maybeSingle to handle case where user doesn't exist
+
+          if (userResponse != null) {
+            // User exists in database
+            final user = UserModel.fromJson(userResponse);
+            emit(AuthAuthenticated(user: user));
+          } else {
+            // User doesn't exist in database yet, create one
+            if (kDebugMode) {
+              debugPrint('🔐 AuthBloc: User profile not found, creating new profile');
+            }
+            
+            final user = UserModel(
+              id: authUser.id,
+              email: authUser.email ?? '',
+              subscriptionTier: 'free',
+              createdAt: DateTime.parse(authUser.createdAt),
+              updatedAt: DateTime.now(),
+            );
+            
+            // Insert user into database
+            await SupabaseConfig.client.from('users').insert(user.toJson());
+            
+            emit(AuthAuthenticated(user: user));
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('🔐 AuthBloc: Error fetching/creating user profile: $e');
+          }
+          
+          // Fallback: create minimal user model from auth data
+          final user = UserModel(
+            id: authUser.id,
+            email: authUser.email ?? '',
+            subscriptionTier: 'free',
+            createdAt: DateTime.parse(authUser.createdAt),
+            updatedAt: DateTime.now(),
+          );
+          
+          emit(AuthAuthenticated(user: user));
+        }
+      } else {
+        if (kDebugMode) {
+          debugPrint('🔐 AuthBloc: Apple sign-in cancelled by user');
+        }
+        // User cancelled sign-in, return to unauthenticated state
+        emit(AuthUnauthenticated());
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('🔐 AuthBloc: Apple sign-in error: $e');
+      }
+      
+      final error = _errorHandler.handleException(e, 'Apple sign-in');
       emit(AuthError(error: error));
     }
   }

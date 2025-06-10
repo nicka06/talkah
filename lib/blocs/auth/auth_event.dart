@@ -62,4 +62,8 @@ class AuthUpdatePasswordRequested extends AuthEvent {
 
   @override
   List<Object> get props => [newPassword];
-} 
+}
+
+class AuthGoogleSignInRequested extends AuthEvent {}
+
+class AuthAppleSignInRequested extends AuthEvent {} 
