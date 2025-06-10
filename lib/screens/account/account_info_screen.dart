@@ -23,22 +23,37 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: Colors.red, // Red background to match dashboard
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: Colors.red, // Red background for app bar
         elevation: 0,
         leading: IconButton(
           icon: Icon(
             Icons.arrow_back_ios,
-            color: Theme.of(context).colorScheme.onSurface,
+            color: Colors.black,
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Account Info',
+          'ACCOUNT INFO',
           style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: Colors.black,
+            letterSpacing: 1.5,
+            shadows: [
+              Shadow(
+                offset: Offset(2, 2),
+                blurRadius: 0,
+                color: Colors.white.withOpacity(0.3),
+              ),
+              Shadow(
+                offset: Offset(-1, -1),
+                blurRadius: 0,
+                color: Colors.black.withOpacity(0.5),
+              ),
+            ],
+            fontFamily: 'Arial Black',
           ),
         ),
         centerTitle: true,
@@ -47,59 +62,61 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
         listener: (context, state) {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: ${state.error.message}')),
+              SnackBar(
+                content: Text('Error: ${state.error.message}'),
+                backgroundColor: Colors.red,
+              ),
             );
           }
         },
-        child: BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, state) {
-            if (state is AuthAuthenticated || state is AuthUpdating) {
-              final user = state is AuthAuthenticated ? state.user : (state as AuthUpdating).user;
-              _currentUser = user;
-              
-              return Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Account Information',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.red, // Changed from white to red
+          ),
+          child: BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, state) {
+              if (state is AuthAuthenticated || state is AuthUpdating) {
+                final user = state is AuthAuthenticated ? state.user : (state as AuthUpdating).user;
+                _currentUser = user;
+                
+                return Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center, // Center everything
+                    children: [
+                      // Removed "Account Information" text
+                      
+                      const SizedBox(height: 32),
+                      
+                      // Email Field
+                      _buildInfoRow(
+                        label: 'Email',
+                        value: user.email,
+                        isPassword: false,
+                        isPending: _emailPendingVerification,
+                        onEdit: () => _showEmailChangeDialog(),
                       ),
-                    ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Email Field
-                    _buildInfoRow(
-                      label: 'Email',
-                      value: user.email,
-                      isPassword: false,
-                      isPending: _emailPendingVerification,
-                      onEdit: () => _showEmailChangeDialog(),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Password Field
-                    _buildInfoRow(
-                      label: 'Password',
-                      value: _generatePasswordMask(_passwordLength),
-                      isPassword: true,
-                      isPending: _passwordPendingVerification,
-                      onEdit: () => _showPasswordChangeDialog(),
-                    ),
-                  ],
-                ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Password Field
+                      _buildInfoRow(
+                        label: 'Password',
+                        value: _generatePasswordMask(_passwordLength),
+                        isPassword: true,
+                        isPending: _passwordPendingVerification,
+                        onEdit: () => _showPasswordChangeDialog(),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
+              return const Center(
+                child: CircularProgressIndicator(),
               );
-            }
-            
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          },
+            },
+          ),
         ),
       ),
     );
@@ -113,60 +130,88 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     required VoidCallback onEdit,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16.0),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.all(20.0),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
         border: isPending ? Border.all(
           color: Colors.orange,
-          width: 1,
+          width: 2,
         ) : null,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurface,
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontFamily: isPassword ? 'monospace' : null,
+                    ),
+                  ),
                 ),
               ),
-              IconButton(
-                onPressed: onEdit,
-                icon: Icon(
-                  Icons.edit,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 20,
+              const SizedBox(width: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                child: IconButton(
+                  onPressed: onEdit,
+                  icon: Icon(
+                    Icons.edit,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  padding: EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                ),
               ),
             ],
           ),
           
-          const SizedBox(height: 8),
-          
-          Text(
-            value,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontFamily: isPassword ? 'monospace' : null,
-            ),
-          ),
-          
           if (isPending) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             GestureDetector(
               onTap: () => _showPendingVerificationDialog(label, isPassword),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.orange, width: 1),
                 ),
                 child: Row(
@@ -177,15 +222,16 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                       color: Colors.orange,
                       size: 16,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
                       'Pending Verification',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      style: TextStyle(
                         color: Colors.orange,
                         fontWeight: FontWeight.w500,
+                        fontSize: 12,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Icon(
                       Icons.info_outline,
                       color: Colors.orange,
@@ -211,9 +257,11 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Email Change Pending'),
           content: Text(
             'You already have a pending email change to ${_pendingEmail ?? 'a new address'}. Please check your email for the verification link or cancel the current change first.',
+            textAlign: TextAlign.center,
           ),
           actions: [
             TextButton(
@@ -241,13 +289,18 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Change Email'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Change Email',
+          textAlign: TextAlign.center,
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               'Enter your new email address. A verification email will be sent to confirm the change.',
+              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -256,10 +309,16 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'New Email',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.red, width: 2),
+                ),
                 prefixIcon: Icon(Icons.email_outlined),
+                filled: true,
+                fillColor: Colors.grey[50],
               ),
             ),
           ],
@@ -270,6 +329,11 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
             onPressed: () {
               final newEmail = emailController.text.trim();
               if (newEmail.isEmpty) {
@@ -307,6 +371,7 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Password Change Pending'),
           content: const Text(
             'You already have a pending password change. Please wait for it to complete before initiating another change.',
@@ -329,13 +394,18 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Change Password'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Change Password',
+          textAlign: TextAlign.center,
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               'Enter your current password and new password. Your password will be updated immediately after verification.',
+              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -344,30 +414,48 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             TextField(
               controller: currentPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Current Password',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.red, width: 2),
+                ),
                 prefixIcon: Icon(Icons.lock_outline),
+                filled: true,
+                fillColor: Colors.grey[50],
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: newPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'New Password',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.red, width: 2),
+                ),
                 prefixIcon: Icon(Icons.lock_outline),
+                filled: true,
+                fillColor: Colors.grey[50],
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: confirmPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Confirm New Password',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.red, width: 2),
+                ),
                 prefixIcon: Icon(Icons.lock_outline),
+                filled: true,
+                fillColor: Colors.grey[50],
               ),
             ),
           ],
@@ -378,6 +466,11 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
             onPressed: () {
               if (_validatePasswordChange(
                 currentPasswordController.text,
@@ -438,8 +531,12 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Pending ${fieldType} Verification'),
-        content: Text(message),
+        content: Text(
+          message,
+          textAlign: TextAlign.center,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),

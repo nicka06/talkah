@@ -4,6 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../config/supabase_config.dart';
 import '../models/usage_model.dart';
 import '../models/call_record.dart';
+import '../models/email_record.dart';
+import '../models/sms_record.dart';
+import '../models/activity_record.dart';
+import '../models/user_model.dart';
 import './subscription_service.dart';
 
 // Exception class for usage limit errors
@@ -374,5 +378,95 @@ class ApiService {
   }) async {
     // Use the same initiate call method
     return await initiateCall(phoneNumber: phoneNumber, topic: topic);
+  }
+
+  // Get email history
+  static Future<List<EmailRecord>> getEmailHistory({int limit = 50, int offset = 0}) async {
+    try {
+      final userId = SupabaseConfig.auth.currentUser?.id;
+      if (userId == null) {
+        print('No authenticated user');
+        return [];
+      }
+
+      // Query emails table using Supabase client
+      final response = await SupabaseConfig.client
+          .from('emails')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(limit)
+          .range(offset, offset + limit - 1);
+
+      if (response == null) return [];
+
+      return (response as List<dynamic>)
+          .map((json) => EmailRecord.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error getting email history: $e');
+      return [];
+    }
+  }
+
+  // Get SMS history
+  static Future<List<SmsRecord>> getSmsHistory({int limit = 50, int offset = 0}) async {
+    try {
+      final userId = SupabaseConfig.auth.currentUser?.id;
+      if (userId == null) {
+        print('No authenticated user');
+        return [];
+      }
+
+      // Query sms_messages table using Supabase client
+      final response = await SupabaseConfig.client
+          .from('sms_messages')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(limit)
+          .range(offset, offset + limit - 1);
+
+      if (response == null) return [];
+
+      return (response as List<dynamic>)
+          .map((json) => SmsRecord.fromJson(json))
+          .toList();
+    } catch (e) {
+      print('Error getting SMS history: $e');
+      return [];
+    }
+  }
+
+  // Get unified activity history
+  static Future<List<ActivityRecord>> getActivityHistory({int limit = 50}) async {
+    try {
+      final List<ActivityRecord> activities = [];
+
+      // Get all three types of activity in parallel
+      final futures = await Future.wait([
+        getCallHistory(limit: limit),
+        getEmailHistory(limit: limit),
+        getSmsHistory(limit: limit),
+      ]);
+
+      final calls = futures[0] as List<CallRecord>;
+      final emails = futures[1] as List<EmailRecord>;
+      final smsMessages = futures[2] as List<SmsRecord>;
+
+      // Convert to ActivityRecord and combine
+      activities.addAll(calls.map((call) => ActivityRecord.fromCall(call)));
+      activities.addAll(emails.map((email) => ActivityRecord.fromEmail(email)));
+      activities.addAll(smsMessages.map((sms) => ActivityRecord.fromSms(sms)));
+
+      // Sort by date (newest first)
+      activities.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      // Return limited results
+      return activities.take(limit).toList();
+    } catch (e) {
+      print('Error getting activity history: $e');
+      return [];
+    }
   }
 } 

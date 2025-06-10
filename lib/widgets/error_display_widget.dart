@@ -415,17 +415,17 @@ class ErrorDisplayWidget {
   static Duration _getSnackBarDuration(ErrorType type) {
     switch (type) {
       case ErrorType.validation:
-        return const Duration(seconds: 4);
+        return const Duration(seconds: 2);
       case ErrorType.network:
       case ErrorType.serverError:
-        return const Duration(seconds: 6);
+        return const Duration(seconds: 3);
       case ErrorType.authentication:
       case ErrorType.authorization:
       case ErrorType.rateLimitExceeded:
       case ErrorType.subscription:
-        return const Duration(seconds: 8);
+        return const Duration(seconds: 4);
       default:
-        return const Duration(seconds: 5);
+        return const Duration(seconds: 3);
     }
   }
 }
@@ -446,6 +446,7 @@ class _NotificationWidget extends StatefulWidget {
 
 class _NotificationWidgetState extends State<_NotificationWidget>
     with SingleTickerProviderStateMixin {
+  
   late AnimationController _animationController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
@@ -459,7 +460,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
     }
     
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
       vsync: this,
     );
 
@@ -468,7 +469,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeOutBack,
+      curve: Curves.easeOutCubic,
     ));
 
     _fadeAnimation = Tween<double>(
@@ -502,6 +503,32 @@ class _NotificationWidgetState extends State<_NotificationWidget>
     widget.onDismiss();
   }
 
+  /// Get brief error message based on error type
+  String _getBriefMessage() {
+    switch (widget.error.type) {
+      case ErrorType.network:
+        return 'Connection problem';
+      case ErrorType.authentication:
+        return 'Sign in failed';
+      case ErrorType.authorization:
+        return 'Access denied';
+      case ErrorType.validation:
+        return 'Please check your input';
+      case ErrorType.serverError:
+        return 'Server error';
+      case ErrorType.configuration:
+        return 'Configuration issue';
+      case ErrorType.rateLimitExceeded:
+        return 'Usage limit reached';
+      case ErrorType.subscription:
+        return 'Subscription issue';
+      case ErrorType.emailConfirmation:
+        return 'Check your email';
+      case ErrorType.unknown:
+        return 'Something went wrong';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Positioned(
@@ -516,82 +543,58 @@ class _NotificationWidgetState extends State<_NotificationWidget>
             color: Colors.transparent,
             child: Container(
               margin: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 16,
-                left: 16,
-                right: 16,
+                top: MediaQuery.of(context).padding.top,
               ),
               child: GestureDetector(
                 onTap: _dismiss,
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: ErrorDisplayWidget._getErrorColor(widget.error.type),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
+                    color: const Color(0xFF8B0000), // Dark red
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: const [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                        color: Colors.black26,
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        ErrorDisplayWidget._getErrorIcon(widget.error.type),
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.error.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.error.message,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 14,
-                              ),
-                            ),
-                            if (widget.error.suggestedAction != null) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                widget.error.suggestedAction!,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _dismiss,
-                        icon: const Icon(
-                          Icons.close,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          ErrorDisplayWidget._getErrorIcon(widget.error.type),
                           color: Colors.white,
-                          size: 20,
+                          size: 18,
                         ),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 24,
-                          minHeight: 24,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _getBriefMessage(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: _dismiss,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

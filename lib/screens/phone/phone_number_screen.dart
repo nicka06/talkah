@@ -1,9 +1,9 @@
+import 'package:app_for_talking/screens/activity/activity_history_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/call_record.dart';
 import '../../services/api_service.dart';
 import '../../widgets/usage_limit_modal.dart';
-import 'call_history_screen.dart';
 
 class PhoneNumberScreen extends StatefulWidget {
   const PhoneNumberScreen({super.key});
@@ -329,7 +329,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const CallHistoryScreen(),
+                    builder: (context) => const ActivityHistoryScreen(),
                   ),
                 );
               },

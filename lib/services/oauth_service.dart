@@ -4,17 +4,42 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../config/supabase_config.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 
 class OAuthService {
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
   );
 
+  /// Generate a cryptographically secure nonce for Google Sign-In
+  static String _generateNonce() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (i) => random.nextInt(256));
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+
+  /// Hash a nonce with SHA256
+  static String _hashNonce(String nonce) {
+    final bytes = utf8.encode(nonce);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
   /// Sign in with Google
   static Future<supabase.AuthResponse?> signInWithGoogle() async {
     try {
       if (kDebugMode) {
         debugPrint('🔐 OAuthService: Starting Google Sign-In');
+      }
+
+      // Generate nonce for security
+      final nonce = _generateNonce();
+      final hashedNonce = _hashNonce(nonce);
+
+      if (kDebugMode) {
+        debugPrint('🔐 OAuthService: Generated nonce for secure authentication');
       }
 
       // Trigger Google Sign-In flow
@@ -34,19 +59,19 @@ class OAuthService {
       // Get authentication details
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       
-      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
-        throw Exception('Failed to get Google authentication tokens');
+      if (googleAuth.idToken == null) {
+        throw Exception('Failed to get Google ID token');
       }
 
       if (kDebugMode) {
         debugPrint('🔐 OAuthService: Got Google auth tokens, signing in with Supabase');
       }
 
-      // Sign in with Supabase using Google credentials
+      // Sign in with Supabase using Google credentials and nonce
       final response = await SupabaseConfig.auth.signInWithIdToken(
         provider: supabase.OAuthProvider.google,
         idToken: googleAuth.idToken!,
-        accessToken: googleAuth.accessToken!,
+        nonce: nonce, // Pass the original nonce to Supabase
       );
 
       if (kDebugMode) {
