@@ -69,7 +69,7 @@ async function handleLLM(connectionId, transcript) {
 
   try {
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o", 
+      model: "gpt-4o-mini",
       messages: connectionData.conversationHistory,
       stream: true,
     });
@@ -214,10 +214,8 @@ wss.on('connection', (ws, req) => {
 
           const initialGreeting = `Hello! Let's talk about ${decodedTopic}. What are your initial thoughts on it?`;
           connectionData.conversationHistory.push({ role: "assistant", content: initialGreeting });
-          // Wait for the initial greeting to finish before we start listening.
-          // This prevents the AI from hearing its own voice and responding to it.
-          await handleTTS(connectionId, initialGreeting);
           
+          // SPEED OPTIMIZATION: Start STT immediately, don't wait for TTS
           if (speechClient) {
             console.log(`(ID: ${connectionId}) Initializing STT stream.`);
             recognizeStream = speechClient.streamingRecognize({
@@ -245,6 +243,9 @@ wss.on('connection', (ws, req) => {
             });
             console.log(`(ID: ${connectionId}) STT stream ready.`);
           }
+          
+          // Start initial greeting TTS (non-blocking)
+          handleTTS(connectionId, initialGreeting);
           break;
 
         case 'media':
