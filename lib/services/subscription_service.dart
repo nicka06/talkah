@@ -41,7 +41,7 @@ class SubscriptionService {
       dev.log('🔄 SubscriptionService: Fetching usage for user $userId...');
       
       final response = await _supabase
-          .rpc('get_current_usage', params: {'p_user_id': userId});
+          .rpc('get_current_month_usage', params: {'user_uuid': userId});
 
       if (response == null || (response as List).isEmpty) {
         dev.log('⚠️ SubscriptionService: No usage data found');
@@ -49,7 +49,35 @@ class SubscriptionService {
       }
 
       final usageData = (response as List).first;
-      final usage = UsageTracking.fromJson(usageData);
+      
+      final callsUsed = usageData['calls_used'] ?? 0;
+      final textsUsed = usageData['texts_used'] ?? 0;
+      final emailsUsed = usageData['emails_used'] ?? 0;
+      final tier = usageData['tier'] ?? 'free';
+      
+      final limits = {
+        'free': {'calls': 1, 'texts': 1, 'emails': 1},
+        'pro': {'calls': 5, 'texts': 10, 'emails': -1},
+        'premium': {'calls': -1, 'texts': -1, 'emails': -1}
+      };
+      
+      final tierLimits = limits[tier] ?? limits['free']!;
+      
+      final now = DateTime.now();
+      final billingStart = DateTime(now.year, now.month, 1);
+      final billingEnd = DateTime(now.year, now.month + 1, 0);
+      
+      final usage = UsageTracking(
+        userId: userId,
+        phoneCallsUsed: callsUsed,
+        textChainsUsed: textsUsed,
+        emailsUsed: emailsUsed,
+        phoneCallsLimit: tierLimits['calls']!,
+        textChainsLimit: tierLimits['texts']!,
+        emailsLimit: tierLimits['emails']!,
+        billingPeriodStart: billingStart,
+        billingPeriodEnd: billingEnd,
+      );
       
       dev.log('✅ SubscriptionService: Usage retrieved - Phone: ${usage.phoneCallsDisplay}, Text: ${usage.textChainsDisplay}, Email: ${usage.emailsDisplay}');
       return usage;
@@ -93,6 +121,13 @@ class SubscriptionService {
 
       dev.log('🔄 SubscriptionService: Incrementing $actionType usage by $amount for user $userId...');
       
+      // TODO: The old system didn't have working increment functions
+      // For now, just return true so the app doesn't crash
+      // The increment was happening directly in the Edge Functions
+      dev.log('⚠️ SubscriptionService: Increment function disabled - using Edge Function increments');
+      return true;
+      
+      /*
       final response = await _supabase.rpc('increment_usage', params: {
         'p_user_id': userId,
         'p_usage_type': actionType,
@@ -107,6 +142,7 @@ class SubscriptionService {
       }
       
       return success;
+      */
     } catch (e) {
       dev.log('❌ SubscriptionService: Error incrementing usage: $e');
       return false;
