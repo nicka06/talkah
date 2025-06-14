@@ -55,8 +55,8 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
   }
 
   return (
-    <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-white">
-      <h2 className="font-graffiti text-3xl text-white mb-6 text-center">
+    <div className="bg-white border-2 border-black p-8 rounded-2xl shadow-xl text-black">
+      <h2 className="font-graffiti text-3xl text-black mb-6 text-center">
         {mode === 'signin' ? 'SIGN IN' : 'SIGN UP'}
       </h2>
       
@@ -67,7 +67,7 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 bg-white/5 border-2 border-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white text-white placeholder-white/70"
+            className="w-full px-4 py-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
             required
           />
         </div>
@@ -78,13 +78,13 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 bg-white/5 border-2 border-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white text-white placeholder-white/70"
+            className="w-full px-4 py-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
             required
           />
         </div>
 
         {error && (
-          <div className="text-red-300 text-sm text-center">
+          <div className="text-red-600 text-sm text-center">
             {error}
           </div>
         )}
@@ -92,23 +92,23 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-white text-primary-600 py-3 rounded-lg font-graffiti text-xl hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full border-2 border-black text-black bg-white py-3 rounded-lg font-graffiti text-xl hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'LOADING...' : mode === 'signin' ? 'SIGN IN' : 'SIGN UP'}
         </button>
 
-        <div className="text-center text-white/90">
+        <div className="text-center text-black/90">
           {mode === 'signin' ? (
             <p>
               Don't have an account?{' '}
-              <a href="/auth/signup" className="text-white hover:text-primary-300 transition-colors">
+              <a href="/auth/signup" className="text-black underline hover:text-black/70 transition-colors">
                 Sign up
               </a>
             </p>
           ) : (
             <p>
               Already have an account?{' '}
-              <a href="/auth/login" className="text-white hover:text-primary-300 transition-colors">
+              <a href="/auth/login" className="text-black underline hover:text-black/70 transition-colors">
                 Sign in
               </a>
             </p>
