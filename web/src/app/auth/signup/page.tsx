@@ -34,12 +34,12 @@ export default function SignUpPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background-light flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-lg">T</span>
+          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-primary-600 font-bold text-lg">T</span>
           </div>
-          <p className="text-text-secondary">Loading...</p>
+          <p className="text-white">Loading...</p>
         </div>
       </div>
     )
@@ -50,26 +50,36 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background-light">
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-background-dark text-white py-4">
-        <div className="container mx-auto px-4">
+      <header className="text-white py-4 border-b-2 border-white">
+        <div className="container mx-auto px-8">
           <div className="flex items-center justify-between">
-            <a href="/" className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-lg">T</span>
+            <a href="/" className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                <span className="text-primary-600 font-bold text-lg">T</span>
               </div>
-              <h1 className="font-graffiti text-2xl font-bold text-primary">
+              <h1 className="font-graffiti text-2xl font-bold text-white">
                 TALKAH
               </h1>
             </a>
+            <nav className="flex space-x-6">
+              <a
+                href="/auth/login"
+                className="px-6 py-2 rounded-lg font-semibold border-2 border-white text-white hover:bg-white hover:text-primary-600 transition-colors"
+              >
+                Sign In
+              </a>
+            </nav>
           </div>
         </div>
       </header>
 
       {/* Sign Up Form */}
       <main className="container mx-auto px-4 py-16">
-        <AuthForm mode="signup" onSuccess={handleSuccess} />
+        <div className="max-w-md mx-auto">
+          <AuthForm mode="signup" onSuccess={handleSuccess} />
+        </div>
       </main>
     </div>
   )
