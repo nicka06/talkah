@@ -1,0 +1,510 @@
+# TALKAH Website Development Plan
+## AI-Powered Communication Platform
+
+---
+
+## 🎯 **PROJECT OVERVIEW**
+
+**Goal**: Create a responsive website version of the TALKAH Flutter app that shares the exact same backend (Supabase + Twilio + WebSocket) but provides a web-optimized interface.
+
+**Tech Stack**: Next.js 14 + TypeScript + Tailwind CSS + Supabase + Stripe
+
+**Location**: `/Users/nickalkema/Downloads/Talking-App/app_for_talking/web/`
+
+---
+
+## 🏗️ **ARCHITECTURE & INTEGRATION**
+
+### **Shared Backend Components (100% Reuse)**
+- ✅ **Supabase Database**: All tables (`users`, `calls`, `emails`, `usage_tracking`, etc.)
+- ✅ **Supabase Auth**: Cross-platform authentication (Google, Apple, Email)
+- ✅ **Edge Functions**: `initiate-call`, `send-email`, `send-sms`, `twilio-*`
+- ✅ **WebSocket Service**: Optimized voice AI on Fly.io
+- ✅ **Stripe Integration**: Subscription management
+- ✅ **Twilio Services**: Phone calls, SMS
+
+### **New Website Components**
+- 🆕 **Next.js Frontend**: Responsive web interface
+- 🆕 **Web-specific Pages**: Homepage, legal pages, responsive layouts
+- 🆕 **Local Storage**: Phone number/topic persistence
+- 🆕 **Web Analytics**: User tracking (optional)
+
+---
+
+## 📱 **PAGE STRUCTURE & NAVIGATION**
+
+### **Public Pages (Before Authentication)**
+```
+├── Homepage (/)
+│   ├── Hero Section: "AI Powered Communication" 
+│   ├── Feature Cards: Phone, Email, Texts (soon)
+│   ├── Call-to-Action: Phone number + Topic input
+│   ├── Mobile App Download Links
+│   └── Footer: Privacy, Terms, About, Contact
+│
+├── Legal Pages
+│   ├── Privacy Policy (/privacy)
+│   ├── Terms of Service (/terms)
+│   ├── About Us (/about)
+│   └── Contact (/contact)
+│
+└── Authentication (/auth)
+    ├── Sign Up
+    ├── Sign In  
+    ├── Google OAuth
+    └── Apple OAuth
+```
+
+### **Protected Pages (After Authentication)**
+```
+├── Dashboard (/dashboard)
+│   ├── Usage Overview (calls, emails, texts)
+│   ├── Quick Actions (make call, send email)
+│   ├── Recent Activity
+│   └── Subscription Status
+│
+├── Phone Calls (/calls)
+│   ├── Make Call Interface
+│   ├── Call History
+│   └── WebSocket Voice Integration
+│
+├── Emails (/emails) 
+│   ├── Compose Email Interface
+│   ├── Email History
+│   └── AI-powered composition
+│
+├── Activity History (/activity)
+│   ├── All Communications Log
+│   ├── Filters (calls, emails, texts)
+│   └── Export functionality
+│
+└── Account (/account)
+    ├── Profile Settings
+    ├── Subscription Management (Stripe)
+    ├── Usage Limits & Billing
+    └── App Download Links
+```
+
+---
+
+## 🎨 **DESIGN SYSTEM & BRANDING**
+
+### **Visual Identity**
+- **Brand**: TALKAH (matching Flutter app)
+- **Theme**: Red primary color (#DC2626 or similar)
+- **Typography**: Graffiti-style for headers, clean sans-serif for body
+- **Logo**: Circular TALKAH logo (same as Flutter app)
+- **Aesthetic**: Street art/graffiti with modern clean elements
+
+### **Color Palette**
+```css
+Primary Red: #DC2626
+Dark Background: #1A1A1A
+Light Background: #FFFFFF
+Text Primary: #000000
+Text Secondary: #6B7280
+Accent: #F59E0B
+Success: #10B981
+Error: #EF4444
+```
+
+### **Component Library**
+- **Buttons**: Black rounded buttons with white text
+- **Cards**: White background with subtle shadows
+- **Forms**: Clean inputs with red focus states
+- **Navigation**: Dark header with red accents
+- **Mobile**: Responsive design that works 320px+
+
+---
+
+## 🔄 **USER FLOW DIAGRAMS**
+
+### **New User Journey**
+```
+1. Homepage → Enter phone + topic → Click "Call"
+2. Redirect to /auth with phone/topic saved in localStorage
+3. Sign up with Google/Apple/Email
+4. Redirect to /calls with saved phone/topic populated
+5. Click "Call Now" → WebSocket connection → AI conversation
+6. Call completes → Usage tracked → Redirect to dashboard
+```
+
+### **Returning User Journey**
+```
+1. Homepage → Already signed in → Redirect to /dashboard
+2. OR Homepage → Enter phone + topic → Auto-redirect to /calls
+3. Dashboard → Quick actions or navigation to specific features
+```
+
+### **Cross-Platform Sync**
+```
+- User signs up on website → Can immediately use Flutter app
+- User has Flutter app → Can sign into website with same account
+- Usage limits shared across both platforms
+- Subscription status synced in real-time
+```
+
+---
+
+## 🛠️ **TECHNICAL IMPLEMENTATION**
+
+### **Project Structure**
+```
+web/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── (auth)/            # Auth group
+│   │   │   ├── login/
+│   │   │   └── signup/
+│   │   ├── (dashboard)/       # Protected routes
+│   │   │   ├── dashboard/
+│   │   │   ├── calls/
+│   │   │   ├── emails/
+│   │   │   ├── activity/
+│   │   │   └── account/
+│   │   ├── about/
+│   │   ├── privacy/
+│   │   ├── terms/
+│   │   ├── contact/
+│   │   ├── layout.tsx         # Root layout
+│   │   ├── page.tsx           # Homepage
+│   │   └── globals.css
+│   │
+│   ├── components/            # Reusable components
+│   │   ├── ui/               # Base UI components
+│   │   ├── auth/             # Authentication components
+│   │   ├── calls/            # Call-related components
+│   │   ├── emails/           # Email components
+│   │   └── layout/           # Layout components
+│   │
+│   ├── lib/                  # Utilities & integrations
+│   │   ├── supabase.ts      # Supabase client
+│   │   ├── stripe.ts        # Stripe integration
+│   │   ├── websocket.ts     # WebSocket client
+│   │   └── utils.ts         # Helper functions
+│   │
+│   ├── types/               # TypeScript definitions
+│   │   ├── database.ts      # Supabase types
+│   │   ├── auth.ts          # Auth types
+│   │   └── api.ts           # API response types
+│   │
+│   └── hooks/               # Custom React hooks
+│       ├── useAuth.ts
+│       ├── useSupabase.ts
+│       └── useWebSocket.ts
+│
+├── public/                  # Static assets
+│   ├── images/
+│   ├── icons/
+│   └── logo/
+│
+├── package.json
+├── next.config.js
+├── tailwind.config.js
+├── tsconfig.json
+└── .env.local
+```
+
+### **Key Dependencies**
+```json
+{
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.0.0",
+    "typescript": "^5.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "@supabase/auth-helpers-nextjs": "^0.8.0",
+    "@stripe/stripe-js": "^2.0.0",
+    "tailwindcss": "^3.0.0",
+    "framer-motion": "^10.0.0",
+    "lucide-react": "^0.300.0",
+    "next-themes": "^0.2.0"
+  }
+}
+```
+
+---
+
+## 🔐 **AUTHENTICATION & SECURITY**
+
+### **Supabase Auth Integration**
+```typescript
+// Same auth provider configuration as Flutter app
+const supabase = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+})
+
+// Cross-platform session sharing
+const { data: { session } } = await supabase.auth.getSession()
+```
+
+### **OAuth Providers**
+- **Google**: Same client ID as Flutter app
+- **Apple**: Same Apple Developer configuration
+- **Email**: Supabase built-in email auth
+
+### **Route Protection**
+```typescript
+// Middleware for protected routes
+export async function middleware(request: NextRequest) {
+  const response = NextResponse.next()
+  const supabase = createMiddlewareClient({ req: request, res: response })
+  await supabase.auth.getSession()
+  return response
+}
+```
+
+---
+
+## 📞 **PHONE CALL INTEGRATION**
+
+### **WebSocket Connection**
+```typescript
+// Reuse existing WebSocket service
+const wsUrl = 'wss://websocket-server-ancient-shape-3559.fly.dev'
+const callConnection = new WebSocket(wsUrl)
+
+// Same authentication and user association as Flutter app
+```
+
+### **Call Flow Integration**
+1. **Web UI**: User enters phone number + topic
+2. **Edge Function**: Call `initiate-call` (same as Flutter)
+3. **Twilio**: Creates call with WebSocket callback
+4. **WebSocket**: AI conversation (gpt-4o-mini optimized)
+5. **Database**: Usage tracking via `twilio-status-callback`
+
+---
+
+## 📧 **EMAIL INTEGRATION**
+
+### **Email Composition**
+```typescript
+// Reuse existing send-email Edge Function
+const emailResponse = await fetch('/api/send-email', {
+  method: 'POST',
+  body: JSON.stringify({
+    to: recipientEmail,
+    subject: subject,
+    content: aiGeneratedContent
+  })
+})
+```
+
+### **AI Email Generation**
+- **Same OpenAI integration** as mobile app
+- **Template system** for different email types
+- **Real-time preview** with AI suggestions
+
+---
+
+## 💳 **STRIPE INTEGRATION**
+
+### **Subscription Management**
+```typescript
+// Reuse existing Stripe customer data
+const stripeCustomer = await stripe.customers.retrieve(user.stripe_customer_id)
+
+// Billing portal redirect
+const portalSession = await stripe.billingPortal.sessions.create({
+  customer: stripeCustomer.id,
+  return_url: `${domain}/account`
+})
+```
+
+### **Usage Tracking**
+- **Same database functions**: `get_current_month_usage()`, `increment_usage()`
+- **Real-time updates** via Supabase realtime subscriptions
+- **Visual progress bars** for usage limits
+
+---
+
+## 📋 **IMPLEMENTATION ROADMAP**
+
+### **Phase 1: Foundation (Week 1)**
+```
+Day 1-2: Project Setup
+- ✅ Create Next.js project in /web directory
+- ✅ Configure Tailwind CSS with TALKAH theme
+- ✅ Set up Supabase client and authentication
+- ✅ Create basic project structure
+
+Day 3-4: Authentication System
+- ✅ Implement sign up/sign in pages
+- ✅ Configure Google/Apple OAuth
+- ✅ Test cross-platform auth with Flutter app
+- ✅ Create protected route middleware
+
+Day 5-7: Homepage & Static Pages
+- ✅ Build homepage with graffiti aesthetic
+- ✅ Create Privacy Policy, Terms of Service
+- ✅ Add About Us, Contact pages
+- ✅ Implement phone number + topic capture
+```
+
+### **Phase 2: Core Features (Week 2)**
+```
+Day 8-10: Dashboard & Navigation
+- ✅ Create main dashboard layout
+- ✅ Build navigation components
+- ✅ Implement usage tracking display
+- ✅ Add subscription status integration
+
+Day 11-12: Phone Call System
+- ✅ Build call interface page
+- ✅ Integrate WebSocket connection
+- ✅ Test with existing Twilio functions
+- ✅ Implement call history display
+
+Day 13-14: Email System
+- ✅ Create email composition interface
+- ✅ Integrate with send-email Edge Function
+- ✅ Build email history page
+- ✅ Add AI-powered email generation
+```
+
+### **Phase 3: Advanced Features (Week 3)**
+```
+Day 15-17: Account Management
+- ✅ Build account settings page
+- ✅ Integrate Stripe billing portal
+- ✅ Add subscription upgrade/downgrade
+- ✅ Implement usage limit management
+
+Day 18-19: Activity History
+- ✅ Create comprehensive activity log
+- ✅ Add filtering and search
+- ✅ Implement export functionality
+- ✅ Real-time activity updates
+
+Day 20-21: Polish & Testing
+- ✅ Responsive design optimization
+- ✅ Performance optimization
+- ✅ Cross-browser testing
+- ✅ Integration testing with Flutter app
+```
+
+### **Phase 4: Deployment (Week 4)**
+```
+Day 22-24: Production Setup
+- ✅ Configure production environment
+- ✅ Set up Vercel deployment
+- ✅ Configure custom domain
+- ✅ SSL and security headers
+
+Day 25-26: App Store Integration
+- ✅ Create App Store Connect listings
+- ✅ Generate app store URLs
+- ✅ Add deep linking support
+- ✅ Test mobile app downloads
+
+Day 27-28: Launch Preparation
+- ✅ Final testing and QA
+- ✅ Performance monitoring setup
+- ✅ Analytics integration
+- ✅ Launch checklist completion
+```
+
+---
+
+## 🚀 **DEPLOYMENT STRATEGY**
+
+### **Hosting: Vercel (Recommended)**
+```bash
+# Production deployment
+npm run build
+vercel --prod
+
+# Custom domain setup
+vercel domains add talkah.com
+```
+
+### **Environment Variables**
+```env
+# Supabase (same as Flutter app)
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Stripe (same as Flutter app)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_SECRET_KEY=
+
+# App Store URLs (to be created)
+NEXT_PUBLIC_IOS_APP_URL=
+NEXT_PUBLIC_ANDROID_APP_URL=
+
+# WebSocket Service
+NEXT_PUBLIC_WEBSOCKET_URL=wss://websocket-server-ancient-shape-3559.fly.dev
+```
+
+### **Performance Optimization**
+- **Next.js Image Optimization**: Automatic image compression
+- **Code Splitting**: Automatic route-based splitting
+- **Static Generation**: Pre-render static pages
+- **CDN**: Vercel Edge Network for global performance
+
+---
+
+## 📊 **ANALYTICS & MONITORING**
+
+### **User Analytics**
+- **Vercel Analytics**: Built-in performance monitoring
+- **Supabase Analytics**: Database usage tracking
+- **Custom Events**: Call completions, email sends, sign-ups
+
+### **Error Monitoring**
+- **Vercel Error Tracking**: Runtime error monitoring
+- **Supabase Logs**: Edge Function error tracking
+- **Client-side Logging**: User action tracking
+
+---
+
+## 🔗 **MOBILE APP INTEGRATION**
+
+### **App Store URLs (To Be Created)**
+```typescript
+const APP_STORE_URLS = {
+  ios: 'https://apps.apple.com/app/talkah/id[PENDING]',
+  android: 'https://play.google.com/store/apps/details?id=com.talkah.app'
+}
+```
+
+### **Deep Linking**
+```typescript
+// Universal links for seamless mobile handoff
+const deepLinks = {
+  openInApp: `talkah://call?phone=${phone}&topic=${topic}`,
+  downloadPage: '/download'
+}
+```
+
+---
+
+## ✅ **SUCCESS METRICS**
+
+### **Technical KPIs**
+- **Page Load Speed**: < 2 seconds
+- **Call Connection Rate**: > 95%
+- **Cross-platform Auth**: 100% compatibility
+- **Mobile Responsiveness**: Works on all screen sizes
+
+### **Business KPIs**
+- **User Conversion**: Homepage → Sign-up
+- **Feature Usage**: Calls vs Emails vs Texts
+- **Subscription Upgrades**: Free → Paid conversion
+- **Platform Distribution**: Web vs Mobile usage
+
+---
+
+## 🎯 **NEXT STEPS**
+
+1. **Confirm this plan** meets your requirements
+2. **Create the Next.js project** in `/web` directory
+3. **Start with Phase 1**: Foundation and authentication
+4. **Iterate and refine** based on testing feedback
+
+---
+
+**Ready to build the future of AI-powered communication! 🚀**
