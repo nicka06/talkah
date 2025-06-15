@@ -33,6 +33,8 @@ export default function CallHistoryPage() {
       setLoading(true)
       setError(null)
       const history = await CallService.getCallHistory()
+      console.log('Call history data:', history) // Debug log
+      console.log('First call data:', history[0]) // Debug log
       setCalls(history)
     } catch (err) {
       console.error('Error loading call history:', err)
@@ -109,88 +111,95 @@ export default function CallHistoryPage() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto">
-          {/* Back Button */}
-          <div className="flex justify-start mb-8">
-            <BackButton text="Calls" href="/dashboard/calls" />
-          </div>
+          {/* Main Card Container */}
+          <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black">
+            {/* Back Button inside card */}
+            <div className="flex justify-start mb-6">
+              <BackButton text="Calls" href="/dashboard/calls" />
+            </div>
 
-          <h1 className="font-graffiti text-5xl md:text-6xl font-bold text-black mb-8 text-center">
-            CALL HISTORY
-          </h1>
+            <h1 className="font-graffiti text-4xl md:text-5xl font-bold text-black mb-8 text-center">
+              CALL HISTORY
+            </h1>
 
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <p className="text-black">Loading call history...</p>
               </div>
-              <p className="text-black">Loading call history...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-12">
-              <p className="text-black mb-4">{error}</p>
-              <button
-                onClick={loadCallHistory}
-                className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                Try Again
-              </button>
-            </div>
-          ) : calls.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-black mb-4">No calls found</p>
-              <a
-                href="/dashboard/calls"
-                className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors inline-block"
-              >
-                Make Your First Call
-              </a>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {calls.map((call) => (
-                <div
-                  key={call.id}
-                  className="bg-white/10 backdrop-blur-sm p-6 rounded-xl border-2 border-black"
+            ) : error ? (
+              <div className="text-center py-12">
+                <p className="text-black mb-4">{error}</p>
+                <button
+                  onClick={loadCallHistory}
+                  className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
                 >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-black">
-                          {CallService.formatPhoneNumber(call.userPhoneNumber)}
-                        </h3>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(call.status)}`}
-                        >
-                          {formatStatus(call.status)}
-                        </span>
+                  Try Again
+                </button>
+              </div>
+            ) : calls.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-black mb-4">No calls found</p>
+                <a
+                  href="/dashboard/calls"
+                  className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors inline-block"
+                >
+                  Make Your First Call
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {calls.map((call) => (
+                  <div
+                    key={call.id}
+                    className="bg-black p-6 rounded-xl border-2 border-black"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold text-white">
+                            {CallService.formatPhoneNumber(call.userPhoneNumber) || call.userPhoneNumber || 'No phone number'}
+                          </h3>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(call.status)}`}
+                          >
+                            {formatStatus(call.status)}
+                          </span>
+                        </div>
+                        <p className="text-white/80 mb-2">{call.topic}</p>
+                        <p className="text-white/60 text-sm">
+                          {CallService.formatDate(call.createdAt)}
+                        </p>
+                        {/* Debug info */}
+                        <p className="text-white/40 text-xs">
+                          Debug: userPhoneNumber = "{call.userPhoneNumber}"
+                        </p>
                       </div>
-                      <p className="text-black/80 mb-2">{call.topic}</p>
-                      <p className="text-black/60 text-sm">
-                        {CallService.formatDate(call.createdAt)}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleRedial(call.userPhoneNumber, call.topic)}
-                        className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
-                      >
-                        Redial
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleRedial(call.userPhoneNumber, call.topic)}
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                        >
+                          Redial
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
 
-          {/* Navigation Links */}
-          <div className="mt-8 text-center">
-            <a
-              href="/dashboard/calls"
-              className="px-6 py-2 bg-white/10 border-2 border-black rounded-lg text-black hover:bg-black hover:text-white transition-colors"
-            >
-              Make New Call
-            </a>
+            {/* Navigation Links */}
+            <div className="mt-8 text-center">
+              <a
+                href="/dashboard/calls"
+                className="px-6 py-2 bg-white/10 border-2 border-black rounded-lg text-black hover:bg-black hover:text-white transition-colors"
+              >
+                Make New Call
+              </a>
+            </div>
           </div>
         </div>
       </main>

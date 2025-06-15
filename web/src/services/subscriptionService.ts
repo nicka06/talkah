@@ -63,6 +63,9 @@ export class SubscriptionService {
           ...plan,
           priceMonthly: plan.price_monthly ?? fallback.monthly,
           priceYearly: plan.price_yearly ?? fallback.yearly,
+          phoneCallsLimit: plan.phone_calls_limit ?? 0,
+          textChainsLimit: plan.text_chains_limit ?? 0,
+          emailsLimit: plan.emails_limit ?? 0,
           createdAt: new Date(plan.created_at),
           updatedAt: new Date(plan.updated_at)
         }

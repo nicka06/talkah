@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { BackButton } from '@/components/shared/BackButton';
 
 function formatDate(dateString: string) {
   const date = new Date(dateString);
@@ -52,52 +53,61 @@ export default function ActivityHistoryPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[#DC2626]">
         <div className="text-center">
-          <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-lg">T</span>
+          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-primary-600 font-bold text-lg">T</span>
           </div>
-          <p className="text-black">Loading history...</p>
+          <p className="text-white">Loading history...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen py-16 px-4 bg-transparent">
+    <div className="min-h-screen py-16 px-4 bg-[#DC2626]">
       <div className="max-w-4xl mx-auto">
-        <h1 className="font-graffiti text-4xl md:text-6xl font-bold text-black mb-10 text-center">
-          Communication History
-        </h1>
-        <div className="bg-white/80 border-2 border-black rounded-2xl shadow-xl overflow-x-auto">
-          <table className="min-w-full divide-y divide-black">
-            <thead>
-              <tr className="bg-white">
-                <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Type</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Recipient</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Date/Time</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Summary</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Status</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white/60 divide-y divide-black">
-              {activities.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-8 text-black/60">No history found.</td>
+        {/* Main Card Container */}
+        <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black">
+          {/* Back Button inside card */}
+          <div className="flex justify-start mb-6">
+            <BackButton text="Dashboard" href="/dashboard" />
+          </div>
+
+          <h1 className="font-graffiti text-4xl md:text-5xl font-bold text-black mb-8 text-center">
+            COMMUNICATION HISTORY
+          </h1>
+          
+          <div className="bg-white/80 border-2 border-black rounded-2xl shadow-xl overflow-x-auto">
+            <table className="min-w-full divide-y divide-black">
+              <thead>
+                <tr className="bg-white">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Type</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Recipient</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Date/Time</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Summary</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider border-b-2 border-black">Status</th>
                 </tr>
-              ) : (
-                activities.map((item) => (
-                  <tr key={item.id + item._type} className="hover:bg-black/5 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-black">{item._type}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-black">{item._type === 'Email' ? item.recipient_email : item._type === 'Call' ? item.phone_number : item.phone_number}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-black">{formatDate(item.created_at)}</td>
-                    <td className="px-6 py-4 text-black">{item._type === 'Email' ? item.subject : item._type === 'Call' ? item.topic : item.message || ''}</td>
-                    <td className="px-6 py-4 text-black font-semibold">{item.status || ''}</td>
+              </thead>
+              <tbody className="bg-white/60 divide-y divide-black">
+                {activities.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-black/60">No history found.</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  activities.map((item) => (
+                    <tr key={item.id + item._type} className="hover:bg-black/5 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap font-semibold text-black">{item._type}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-black">{item._type === 'Email' ? item.recipient_email : item._type === 'Call' ? item.user_phone_number : item.phone_number}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-black">{formatDate(item.created_at)}</td>
+                      <td className="px-6 py-4 text-black">{item._type === 'Email' ? item.subject : item._type === 'Call' ? item.topic : item.message || ''}</td>
+                      <td className="px-6 py-4 text-black font-semibold">{item.status || ''}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

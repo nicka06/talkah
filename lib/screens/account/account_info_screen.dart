@@ -5,6 +5,7 @@ import '../../blocs/auth/auth_state.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../models/user_model.dart';
 import '../../services/api_service.dart';
+import '../../config/supabase_config.dart';
 
 class AccountInfoScreen extends StatefulWidget {
   const AccountInfoScreen({super.key});
@@ -15,108 +16,98 @@ class AccountInfoScreen extends StatefulWidget {
 
 class _AccountInfoScreenState extends State<AccountInfoScreen> {
   UserModel? _currentUser;
-  bool _emailPendingVerification = false;
   bool _passwordPendingVerification = false;
-  String? _pendingEmail; // Store the pending email address
   int _passwordLength = 10; // Default password length for display
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.red, // Red background to match dashboard
-      appBar: AppBar(
-        backgroundColor: Colors.red, // Red background for app bar
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios,
-            color: Colors.black,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'ACCOUNT INFO',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-            color: Colors.black,
-            letterSpacing: 1.5,
-            shadows: [
-              Shadow(
-                offset: Offset(2, 2),
-                blurRadius: 0,
-                color: Colors.white.withOpacity(0.3),
-              ),
-              Shadow(
-                offset: Offset(-1, -1),
-                blurRadius: 0,
-                color: Colors.black.withOpacity(0.5),
-              ),
-            ],
-            fontFamily: 'Arial Black',
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state is AuthError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error: ${state.error.message}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        },
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.red, // Changed from white to red
-          ),
-          child: BlocBuilder<AuthBloc, AuthState>(
-            builder: (context, state) {
-              if (state is AuthAuthenticated || state is AuthUpdating) {
-                final user = state is AuthAuthenticated ? state.user : (state as AuthUpdating).user;
-                _currentUser = user;
-                
-                return Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center, // Center everything
-                    children: [
-                      // Removed "Account Information" text
-                      
-                      const SizedBox(height: 32),
-                      
-                      // Email Field
-                      _buildInfoRow(
-                        label: 'Email',
-                        value: user.email,
-                        isPassword: false,
-                        isPending: _emailPendingVerification,
-                        onEdit: () => _showEmailChangeDialog(),
-                      ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Password Field
-                      _buildInfoRow(
-                        label: 'Password',
-                        value: _generatePasswordMask(_passwordLength),
-                        isPassword: true,
-                        isPending: _passwordPendingVerification,
-                        onEdit: () => _showPasswordChangeDialog(),
-                      ),
-                    ],
+      backgroundColor: const Color(0xFFDC2626), // Talkah red
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header with back button
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
-                );
-              }
-              
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
-            },
-          ),
+                  const Expanded(
+                    child: Text(
+                      'Account Info',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Balance the back button
+                ],
+              ),
+            ),
+            
+            // Main content
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.black, width: 2),
+                ),
+                child: BlocBuilder<AuthBloc, AuthState>(
+                  builder: (context, state) {
+                    if (state is AuthAuthenticated) {
+                      _currentUser = state.user;
+                      final user = state.user;
+                      final emailPendingVerification = user.hasEmailVerificationPending;
+                      
+                      return Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 32),
+                            
+                            // Email Field
+                            _buildInfoRow(
+                              label: 'Email',
+                              value: user.email,
+                              isPassword: false,
+                              isPending: emailPendingVerification,
+                              pendingValue: user.pendingEmail,
+                              onEdit: () => _showEmailChangeDialog(),
+                            ),
+                            
+                            const SizedBox(height: 16),
+                            
+                            // Password Field
+                            _buildInfoRow(
+                              label: 'Password',
+                              value: _generatePasswordMask(_passwordLength),
+                              isPassword: true,
+                              isPending: _passwordPendingVerification,
+                              pendingValue: null,
+                              onEdit: () => _showPasswordChangeDialog(),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -127,42 +118,30 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     required String value,
     required bool isPassword,
     required bool isPending,
+    String? pendingValue,
     required VoidCallback onEdit,
   }) {
     return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.black,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-        border: isPending ? Border.all(
-          color: Colors.orange,
-          width: 2,
-        ) : null,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black, width: 2),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Label
           Text(
             label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+            style: const TextStyle(
               color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          
           const SizedBox(height: 12),
           
+          // Value and Edit Button Row
           Row(
             children: [
               Expanded(
@@ -174,71 +153,69 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                   ),
                   child: Text(
                     value,
-                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14,
                       color: Colors.white,
+                      fontSize: 16,
                       fontFamily: isPassword ? 'monospace' : null,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
               const SizedBox(width: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: IconButton(
-                  onPressed: onEdit,
-                  icon: Icon(
-                    Icons.edit,
-                    color: Colors.white,
-                    size: 18,
+              GestureDetector(
+                onTap: isPending ? () => _showPendingVerificationDialog(label, isPassword, pendingValue) : onEdit,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  padding: EdgeInsets.all(8),
-                  constraints: const BoxConstraints(),
+                  child: Icon(
+                    isPending ? Icons.schedule : Icons.edit,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
             ],
           ),
           
-          if (isPending) ...[
+          // Pending verification notice
+          if (isPending && pendingValue != null) ...[
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => _showPendingVerificationDialog(label, isPassword),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.orange, width: 1),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.pending,
-                      color: Colors.orange,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Pending Verification',
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[100],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[300]!, width: 1),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule, color: Colors.orange[600], size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pending verification to $pendingValue',
                       style: TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
+                        color: Colors.orange[800],
+                        fontSize: 14,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.orange,
-                      size: 14,
+                  ),
+                  GestureDetector(
+                    onTap: () => _cancelEmailChange(),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.red[600],
+                        fontSize: 14,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -253,14 +230,14 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
 
   void _showEmailChangeDialog() {
     // Check if there's already a pending email change
-    if (_emailPendingVerification) {
+    if (_currentUser?.hasEmailVerificationPending == true) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Email Change Pending'),
           content: Text(
-            'You already have a pending email change to ${_pendingEmail ?? 'a new address'}. Please check your email for the verification link or cancel the current change first.',
+            'You already have a pending email change to ${_currentUser?.pendingEmail ?? 'a new address'}. Please check your email for the verification link or cancel the current change first.',
             textAlign: TextAlign.center,
           ),
           actions: [
@@ -290,35 +267,21 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Change Email',
-          textAlign: TextAlign.center,
-        ),
+        title: const Text('Change Email'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
+            const Text(
               'Enter your new email address. A verification email will be sent to confirm the change.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'New Email',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.red, width: 2),
-                ),
-                prefixIcon: Icon(Icons.email_outlined),
-                filled: true,
-                fillColor: Colors.grey[50],
+                border: OutlineInputBorder(),
               ),
             ),
           ],
@@ -395,67 +358,39 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Change Password',
-          textAlign: TextAlign.center,
-        ),
+        title: const Text('Change Password'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
+            const Text(
               'Enter your current password and new password. Your password will be updated immediately after verification.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: currentPasswordController,
               obscureText: true,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Current Password',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.red, width: 2),
-                ),
-                prefixIcon: Icon(Icons.lock_outline),
-                filled: true,
-                fillColor: Colors.grey[50],
+                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: newPasswordController,
               obscureText: true,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'New Password',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.red, width: 2),
-                ),
-                prefixIcon: Icon(Icons.lock_outline),
-                filled: true,
-                fillColor: Colors.grey[50],
+                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: confirmPasswordController,
               obscureText: true,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Confirm New Password',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.red, width: 2),
-                ),
-                prefixIcon: Icon(Icons.lock_outline),
-                filled: true,
-                fillColor: Colors.grey[50],
+                border: OutlineInputBorder(),
               ),
             ),
           ],
@@ -472,17 +407,40 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
             onPressed: () {
-              if (_validatePasswordChange(
-                currentPasswordController.text,
-                newPasswordController.text,
-                confirmPasswordController.text,
-              )) {
-                Navigator.of(context).pop();
-                _initiatePasswordChange(
-                  currentPasswordController.text,
-                  newPasswordController.text,
+              final currentPassword = currentPasswordController.text;
+              final newPassword = newPasswordController.text;
+              final confirmPassword = confirmPasswordController.text;
+              
+              if (currentPassword.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter your current password')),
                 );
+                return;
               }
+              
+              if (newPassword.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('New password must be at least 6 characters')),
+                );
+                return;
+              }
+              
+              if (newPassword != confirmPassword) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Passwords do not match')),
+                );
+                return;
+              }
+              
+              if (newPassword == currentPassword) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('New password must be different from current password')),
+                );
+                return;
+              }
+              
+              Navigator.of(context).pop();
+              _initiatePasswordChange(currentPassword, newPassword);
             },
             child: const Text('Update Password'),
           ),
@@ -491,42 +449,10 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     );
   }
 
-  bool _validatePasswordChange(String current, String newPassword, String confirm) {
-    if (current.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your current password')),
-      );
-      return false;
-    }
-    
-    if (newPassword.isEmpty || newPassword.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New password must be at least 6 characters')),
-      );
-      return false;
-    }
-    
-    if (newPassword == current) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New password must be different from current password')),
-      );
-      return false;
-    }
-    
-    if (newPassword != confirm) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
-      );
-      return false;
-    }
-    
-    return true;
-  }
-
-  void _showPendingVerificationDialog(String fieldType, bool isPassword) {
+  void _showPendingVerificationDialog(String fieldType, bool isPassword, String? pendingValue) {
     final String message = isPassword 
         ? 'This password will change pending based on a verification process.'
-        : 'This email will change pending based on a verification link sent to ${_pendingEmail ?? 'your new email address'}.';
+        : 'This email will change pending based on a verification link sent to ${pendingValue ?? 'your new email address'}.';
         
     showDialog(
       context: context,
@@ -559,29 +485,45 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     );
   }
 
-  void _cancelEmailChange() {
-    setState(() {
-      _emailPendingVerification = false;
-      _pendingEmail = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Email change cancelled'),
-        backgroundColor: Colors.grey,
-      ),
-    );
+  void _cancelEmailChange() async {
+    try {
+      // Clear the pending_email from the database
+      final userId = _currentUser?.id;
+      if (userId == null) return;
+
+      await SupabaseConfig.client
+          .from('users')
+          .update({'pending_email': null})
+          .eq('id', userId);
+
+      // Refresh user data
+      context.read<AuthBloc>().add(AuthCheckRequested());
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email change cancelled'),
+          backgroundColor: Colors.grey,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to cancel email change: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _initiateEmailChange(String newEmail) async {
-    setState(() {
-      _emailPendingVerification = true;
-      _pendingEmail = newEmail;
-    });
-    
     try {
+      // Only trigger the Supabase auth email change (this sends ONE verification email)
       final success = await ApiService.initiateEmailChange(newEmail: newEmail);
       
       if (success) {
+        // Refresh user data to show any changes
+        context.read<AuthBloc>().add(AuthCheckRequested());
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Verification email sent to $newEmail. Please check your email and click the verification link.'),
@@ -590,10 +532,6 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
           ),
         );
       } else {
-        setState(() {
-          _emailPendingVerification = false;
-          _pendingEmail = null;
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to initiate email change. Please try again.'),
@@ -602,10 +540,6 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
         );
       }
     } catch (e) {
-      setState(() {
-        _emailPendingVerification = false;
-        _pendingEmail = null;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -630,6 +564,7 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
         setState(() {
           _passwordPendingVerification = false;
         });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Password updated successfully!'),
@@ -640,9 +575,10 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
         setState(() {
           _passwordPendingVerification = false;
         });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Current password is incorrect or update failed. Please try again.'),
+            content: Text('Failed to update password. Please check your current password and try again.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -651,6 +587,7 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
       setState(() {
         _passwordPendingVerification = false;
       });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),

@@ -30,10 +30,10 @@ export default function DashboardPage() {
       <main className="container mx-auto px-4 py-16">
         <div className="text-center max-w-4xl mx-auto">
           <h1 className="font-graffiti text-6xl md:text-8xl font-bold text-black mb-6">
-            Welcome to your dashboard
+            Dashboard
           </h1>
           <p className="text-xl text-black/90 mb-12 max-w-2xl mx-auto">
-            Your AI-powered communication hub
+            Have a chat with AI
           </p>
 
           {/* Feature Cards */}
@@ -42,15 +42,15 @@ export default function DashboardPage() {
             <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black order-1 md:order-1 flex flex-col items-center">
               <div className="text-4xl mb-4">📧</div>
               <h3 className="font-bold text-xl mb-2 text-black">Emails</h3>
-              <p className="text-black/90 mb-4">Smart email composition and responses</p>
-              <a href="/dashboard/emails" className="mt-auto px-6 py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors">Go to Emails</a>
+              <p className="text-black/90 mb-4">Have AI send you an email on any topic of your choice</p>
+              <a href="/dashboard/emails" className="mt-auto px-6 py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors">Send an Email</a>
             </div>
             {/* Phone Card - Center */}
             <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black order-2 md:order-2 flex flex-col items-center">
               <div className="text-4xl mb-4">📞</div>
               <h3 className="font-bold text-xl mb-2 text-black">Phone Calls</h3>
-              <p className="text-black/90 mb-4">AI-powered conversations with anyone, anywhere</p>
-              <a href="/dashboard/calls" className="mt-auto px-6 py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors">Go to Calls</a>
+              <p className="text-black/90 mb-4">Talk with AI on any topic you choose</p>
+              <a href="/dashboard/calls" className="mt-auto px-6 py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors">Have a Phone Call with AI</a>
             </div>
             {/* Messages Card - Right */}
             <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black opacity-50 order-3 md:order-3 flex flex-col items-center">

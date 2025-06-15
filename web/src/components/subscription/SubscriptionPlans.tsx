@@ -44,8 +44,32 @@ export function SubscriptionPlans({
       priceMonthly: plan.priceMonthly,
       priceYearly: plan.priceYearly,
       selectedPrice: price,
-      isYearly
+      isYearly,
+      phoneCallsLimit: plan.phoneCallsLimit,
+      textChainsLimit: plan.textChainsLimit,
+      emailsLimit: plan.emailsLimit,
+      fullPlan: plan
     })
+
+    // Define the three core services with their limits
+    const getCoreServices = () => {
+      // Add fallback values in case limits are still undefined
+      const phoneLimit = plan.phoneCallsLimit ?? (plan.id === 'free' ? 1 : plan.id === 'pro' ? 5 : -1)
+      const textLimit = plan.textChainsLimit ?? (plan.id === 'free' ? 1 : plan.id === 'pro' ? 10 : -1)
+      const emailLimit = plan.emailsLimit ?? (plan.id === 'free' ? 1 : -1)
+
+      const phoneDisplay = phoneLimit === -1 ? 'Unlimited' : phoneLimit
+      const textDisplay = textLimit === -1 ? 'Unlimited' : textLimit
+      const emailDisplay = emailLimit === -1 ? 'Unlimited' : emailLimit
+
+      return [
+        `${phoneDisplay} Phone Calls`,
+        `${textDisplay} Text Messages (soon)`,
+        `${emailDisplay} Emails`
+      ]
+    }
+
+    const coreServices = getCoreServices()
 
     return (
       <div className={`
@@ -77,12 +101,12 @@ export function SubscriptionPlans({
           </div>
 
           <div className="space-y-2">
-            {plan.features.map((feature, index) => (
+            {coreServices.map((service, index) => (
               <div key={index} className="flex items-center space-x-2">
                 <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span className="text-sm">{feature}</span>
+                <span className="text-sm">{service}</span>
               </div>
             ))}
           </div>

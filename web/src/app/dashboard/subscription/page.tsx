@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubscription } from '@/hooks/useSubscription'
 import { UsageDisplay } from '@/components/subscription/UsageDisplay'
@@ -9,10 +9,13 @@ import { SubscriptionPlans } from '@/components/subscription/SubscriptionPlans'
 import { StripeService } from '@/services/stripeService'
 import { Navigation } from '@/components/shared/Navigation'
 import { BackButton } from '@/components/shared/BackButton'
+import { useToastContext } from '@/contexts/ToastContext'
 
 export default function SubscriptionPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, loading: authLoading } = useAuth()
+  const { showSuccess, showError, showInfo } = useToastContext()
   const { 
     usage, 
     plans, 
@@ -24,6 +27,18 @@ export default function SubscriptionPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isYearly, setIsYearly] = useState(false)
   const [currentPlanId, setCurrentPlanId] = useState<string>('free')
+
+  // Handle URL parameters (success, canceled, etc.)
+  useEffect(() => {
+    const success = searchParams.get('success')
+    
+    if (success === 'true') {
+      showSuccess('Subscription Updated!', 'Your subscription has been successfully updated.')
+      // Clean up the URL and refresh subscription data
+      router.replace('/dashboard/subscription')
+      refresh()
+    }
+  }, [searchParams, router, showSuccess, refresh])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -49,8 +64,11 @@ export default function SubscriptionPage() {
 
       // Validate plan type
       if (planId === 'free') {
-        throw new Error('Cannot upgrade from the free plan')
+        showError('Invalid Plan', 'Cannot upgrade from the free plan')
+        return
       }
+
+      showInfo('Redirecting to Checkout', 'You will be redirected to Stripe to complete your payment.')
 
       // Create subscription (platform: 'web' is sent by default)
       const subscriptionData = await new StripeService().createSubscription({
@@ -62,11 +80,15 @@ export default function SubscriptionPage() {
 
       // Get the Stripe Checkout URL from the subscription data
       const url = subscriptionData.url
-      if (!url) throw new Error('No Stripe Checkout URL returned')
-      window.location.href = url // Redirect to Stripe Checkout
+      if (!url) {
+        throw new Error('No Stripe Checkout URL returned')
+      }
+      
+      // Redirect to Stripe Checkout
+      window.location.href = url
     } catch (error) {
       console.error('Error upgrading subscription:', error)
-      alert('Failed to upgrade subscription. Please try again.')
+      showError('Upgrade Failed', 'Failed to upgrade subscription. Please try again or contact support.')
     } finally {
       setIsProcessing(false)
     }
@@ -141,16 +163,6 @@ export default function SubscriptionPage() {
               onYearlyChange={setIsYearly}
               isProcessing={isProcessing}
             />
-          </div>
-
-          {/* Navigation Links */}
-          <div className="mt-12 text-center">
-            <a
-              href="/dashboard"
-              className="px-6 py-2 bg-white/10 border-2 border-black rounded-lg text-black hover:bg-black hover:text-white transition-colors"
-            >
-              Back to Dashboard
-            </a>
           </div>
         </div>
       </main>

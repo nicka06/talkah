@@ -7,11 +7,13 @@ import { useSubscription } from '@/hooks/useSubscription'
 import { CallService } from '../../../services/callService'
 import { Navigation } from '@/components/shared/Navigation'
 import { BackButton } from '@/components/shared/BackButton'
+import { useToastContext } from '@/contexts/ToastContext'
 
 export default function CallsPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const { usage, loading: subscriptionLoading } = useSubscription()
+  const { showSuccess, showError, showWarning } = useToastContext()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [topic, setTopic] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -48,11 +50,11 @@ export default function CallsPage() {
   const validateInputs = () => {
     const cleanPhone = phoneNumber.replace(/\D/g, '')
     if (cleanPhone.length !== 10) {
-      alert('Please enter a valid 10-digit phone number')
+      showError('Invalid Phone Number', 'Please enter a valid 10-digit phone number')
       return false
     }
     if (!topic.trim()) {
-      alert('Please enter a topic to discuss')
+      showError('Missing Topic', 'Please enter a topic to discuss')
       return false
     }
     return true
@@ -67,7 +69,17 @@ export default function CallsPage() {
       // Check if user can make a call
       const phoneCallsRemaining = usage ? (usage.phoneCallsLimit === -1 ? Infinity : usage.phoneCallsLimit - usage.phoneCallsUsed) : 0
       if (phoneCallsRemaining <= 0) {
-        alert('You have reached your phone call limit for this billing period. Please upgrade your plan to make more calls.')
+        showWarning(
+          'Call Limit Reached', 
+          'You have reached your phone call limit for this billing period. Please upgrade your plan to make more calls.',
+          { 
+            duration: 8000,
+            action: {
+              label: 'Upgrade Plan',
+              onClick: () => router.push('/dashboard/subscription')
+            }
+          }
+        )
         return
       }
 
@@ -84,20 +96,26 @@ export default function CallsPage() {
 
       if (result) {
         // Show success message
-        alert('Call initiated successfully! You should receive a call shortly.')
+        showSuccess(
+          'Call Initiated!', 
+          'You should receive a call shortly. We\'ll connect you once the call is answered.',
+          { duration: 8000 }
+        )
         
         // Clear form
         setPhoneNumber('')
         setTopic('')
         
-        // Navigate to call history or dashboard
-        router.push('/dashboard/calls/history')
+        // Navigate to call history
+        setTimeout(() => {
+          router.push('/dashboard/calls/history')
+        }, 2000)
       } else {
-        alert('Failed to initiate call. Please try again.')
+        showError('Call Failed', 'Failed to initiate call. Please check your inputs and try again.')
       }
     } catch (error) {
       console.error('Error initiating call:', error)
-      alert('Failed to initiate call. Please try again.')
+      showError('Call Error', 'Failed to initiate call. Please try again or contact support if the problem persists.')
     } finally {
       setIsProcessing(false)
     }

@@ -6,12 +6,12 @@ import { useAuth } from '@/hooks/useAuth'
 import { Navigation } from '@/components/shared/Navigation'
 import { BackButton } from '@/components/shared/BackButton'
 import { createClient } from '@/lib/supabase'
+import { useToastContext } from '@/contexts/ToastContext'
 
 export default function AccountPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
-  const [emailPendingVerification, setEmailPendingVerification] = useState(false)
-  const [passwordPendingVerification, setPasswordPendingVerification] = useState(false)
+  const { showSuccess, showError, showWarning, showInfo } = useToastContext()
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [showEmailDialog, setShowEmailDialog] = useState(false)
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
@@ -22,7 +22,37 @@ export default function AccountPage() {
     confirmPassword: ''
   })
   const [isProcessing, setIsProcessing] = useState(false)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [resendCountdown, setResendCountdown] = useState(0)
+  const [isResending, setIsResending] = useState(false)
   const supabase = createClient()
+
+  // Fetch user profile including pending_email
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return
+
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        if (error) {
+          console.error('Error fetching user profile:', error)
+          return
+        }
+
+        setUserProfile(data)
+        setPendingEmail(data?.pending_email || null)
+      } catch (error) {
+        console.error('Error fetching user profile:', error)
+      }
+    }
+
+    fetchUserProfile()
+  }, [user?.id, supabase])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -30,6 +60,17 @@ export default function AccountPage() {
       router.push('/auth/login')
     }
   }, [user, authLoading, router])
+
+  // Countdown timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (resendCountdown > 0) {
+      interval = setInterval(() => {
+        setResendCountdown(prev => prev - 1)
+      }, 1000)
+    }
+    return () => clearInterval(interval)
+  }, [resendCountdown])
 
   const generatePasswordMask = (length: number = 10) => {
     return '*'.repeat(length)
@@ -43,22 +84,22 @@ export default function AccountPage() {
     const { currentPassword, newPassword, confirmPassword } = passwordForm
     
     if (!currentPassword) {
-      alert('Please enter your current password')
+      showError('Validation Error', 'Please enter your current password')
       return false
     }
     
     if (!newPassword || newPassword.length < 6) {
-      alert('New password must be at least 6 characters')
+      showError('Validation Error', 'New password must be at least 6 characters')
       return false
     }
     
     if (newPassword === currentPassword) {
-      alert('New password must be different from current password')
+      showError('Validation Error', 'New password must be different from current password')
       return false
     }
     
     if (newPassword !== confirmPassword) {
-      alert('Passwords do not match')
+      showError('Validation Error', 'Passwords do not match')
       return false
     }
     
@@ -67,39 +108,75 @@ export default function AccountPage() {
 
   const handleEmailChange = async () => {
     if (!emailForm.newEmail) {
-      alert('Please enter an email address')
+      showError('Validation Error', 'Please enter an email address')
       return
     }
     
     if (!validateEmail(emailForm.newEmail)) {
-      alert('Please enter a valid email address')
+      showError('Validation Error', 'Please enter a valid email address')
       return
     }
     
     if (emailForm.newEmail === user?.email) {
-      alert('This is already your current email address')
+      showWarning('Same Email', 'This is already your current email address')
       return
     }
 
     setIsProcessing(true)
     try {
-      const { error } = await supabase.auth.updateUser({
+      // Only trigger the Supabase auth email change (this sends ONE verification email)
+      const { error: authError } = await supabase.auth.updateUser({
         email: emailForm.newEmail
       })
 
-      if (error) throw error
+      if (authError) throw authError
 
-      setEmailPendingVerification(true)
+      // Set local state for UI (don't update database to avoid triggering more emails)
       setPendingEmail(emailForm.newEmail)
       setShowEmailDialog(false)
       setEmailForm({ newEmail: '' })
       
-      alert(`Verification email sent to ${emailForm.newEmail}. Please check your email and click the verification link.`)
+      // Start the 60-second countdown
+      setResendCountdown(60)
+      
+      showInfo(
+        'Verification Email Sent', 
+        `Please check ${emailForm.newEmail} and click the verification link to complete the change.`,
+        { duration: 8000 }
+      )
     } catch (error: any) {
       console.error('Error updating email:', error)
-      alert(`Failed to update email: ${error.message}`)
+      showError('Update Failed', `Failed to update email: ${error.message}`)
     } finally {
       setIsProcessing(false)
+    }
+  }
+
+  const handleResendEmail = async () => {
+    if (!pendingEmail || resendCountdown > 0) return
+
+    setIsResending(true)
+    try {
+      // Resend the verification email
+      const { error: authError } = await supabase.auth.updateUser({
+        email: pendingEmail
+      })
+
+      if (authError) throw authError
+
+      // Restart the 60-second countdown
+      setResendCountdown(60)
+      
+      showInfo(
+        'Verification Email Resent', 
+        `A new verification email has been sent to ${pendingEmail}`,
+        { duration: 5000 }
+      )
+    } catch (error: any) {
+      console.error('Error resending email:', error)
+      showError('Resend Failed', `Failed to resend email: ${error.message}`)
+    } finally {
+      setIsResending(false)
     }
   }
 
@@ -116,19 +193,31 @@ export default function AccountPage() {
 
       setShowPasswordDialog(false)
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
-      alert('Password updated successfully!')
+      showSuccess('Password Updated', 'Your password has been updated successfully!')
     } catch (error: any) {
       console.error('Error updating password:', error)
-      alert(`Failed to update password: ${error.message}`)
+      showError('Update Failed', `Failed to update password: ${error.message}`)
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const cancelEmailChange = () => {
-    setEmailPendingVerification(false)
-    setPendingEmail(null)
-    alert('Email change cancelled')
+  const cancelEmailChange = async () => {
+    try {
+      // Clear the pending_email from the database
+      const { error } = await supabase
+        .from('users')
+        .update({ pending_email: null })
+        .eq('id', user!.id)
+
+      if (error) throw error
+
+      setPendingEmail(null)
+      showInfo('Email Change Cancelled', 'Your email change request has been cancelled')
+    } catch (error: any) {
+      console.error('Error cancelling email change:', error)
+      showError('Cancel Failed', 'Failed to cancel email change')
+    }
   }
 
   if (authLoading) {
@@ -144,6 +233,8 @@ export default function AccountPage() {
     )
   }
 
+  const emailPendingVerification = !!pendingEmail
+
   return (
     <div className="min-h-screen bg-[#DC2626]">
       {/* Navigation */}
@@ -152,76 +243,101 @@ export default function AccountPage() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-16">
         <div className="max-w-2xl mx-auto">
-          {/* Back Button */}
-          <div className="flex justify-start mb-8">
-            <BackButton text="Dashboard" href="/dashboard" />
-          </div>
-
-          <h1 className="font-graffiti text-5xl md:text-6xl font-bold text-black mb-8 text-center">
-            ACCOUNT INFO
-          </h1>
-
-          <div className="space-y-6">
-            {/* Email Field */}
-            <div className="bg-black p-6 rounded-xl border-2 border-black">
-              <div className="text-center mb-4">
-                <h3 className="text-white font-semibold text-lg">Email</h3>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="flex-1 bg-gray-800 p-3 rounded-lg">
-                  <p className="text-white text-center">{user?.email}</p>
-                </div>
-                <button
-                  onClick={() => emailPendingVerification ? null : setShowEmailDialog(true)}
-                  className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg transition-colors"
-                  disabled={emailPendingVerification}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-              </div>
-
-              {emailPendingVerification && (
-                <div className="mt-4 p-3 bg-orange-100 border border-orange-300 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-orange-800 text-sm">Pending verification to {pendingEmail}</span>
-                    </div>
-                    <button
-                      onClick={cancelEmailChange}
-                      className="text-red-600 hover:text-red-800 text-sm underline"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+          {/* Main Card Container */}
+          <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black">
+            {/* Back Button inside card */}
+            <div className="flex justify-start mb-6">
+              <BackButton text="Dashboard" href="/dashboard" />
             </div>
 
-            {/* Password Field */}
-            <div className="bg-black p-6 rounded-xl border-2 border-black">
-              <div className="text-center mb-4">
-                <h3 className="text-white font-semibold text-lg">Password</h3>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="flex-1 bg-gray-800 p-3 rounded-lg">
-                  <p className="text-white text-center font-mono">{generatePasswordMask()}</p>
+            <h1 className="font-graffiti text-4xl md:text-5xl font-bold text-black mb-8 text-center">
+              ACCOUNT INFO
+            </h1>
+
+            <div className="space-y-6">
+              {/* Email Card */}
+              <div className="bg-black p-6 rounded-xl border-2 border-black">
+                <div className="text-center mb-4">
+                  <h3 className="text-white font-semibold text-lg">Email</h3>
                 </div>
-                <button
-                  onClick={() => passwordPendingVerification ? null : setShowPasswordDialog(true)}
-                  className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg transition-colors"
-                  disabled={passwordPendingVerification}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
+                
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 bg-gray-800 p-3 rounded-lg">
+                    <p className="text-white text-center">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={() => emailPendingVerification ? null : setShowEmailDialog(true)}
+                    className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg transition-colors"
+                    disabled={emailPendingVerification}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </div>
+
+                {emailPendingVerification && (
+                  <div className="mt-4 p-3 bg-orange-100 border border-orange-300 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-orange-800 text-sm">Pending verification to {pendingEmail}</span>
+                      </div>
+                      <button
+                        onClick={cancelEmailChange}
+                        className="text-red-600 hover:text-red-800 text-sm underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    
+                    {/* Resend Email Button */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-orange-700 text-xs">
+                        Didn't receive the email? Check your spam folder.
+                      </span>
+                      <button
+                        onClick={handleResendEmail}
+                        disabled={resendCountdown > 0 || isResending}
+                        className={`text-xs px-3 py-1 rounded transition-colors ${
+                          resendCountdown > 0 || isResending
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-orange-600 hover:bg-orange-700 text-white'
+                        }`}
+                      >
+                        {isResending 
+                          ? 'Sending...' 
+                          : resendCountdown > 0 
+                            ? `Resend in ${resendCountdown}s`
+                            : 'Resend Email'
+                        }
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Password Card */}
+              <div className="bg-black p-6 rounded-xl border-2 border-black">
+                <div className="text-center mb-4">
+                  <h3 className="text-white font-semibold text-lg">Password</h3>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 bg-gray-800 p-3 rounded-lg">
+                    <p className="text-white text-center font-mono">{generatePasswordMask()}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowPasswordDialog(true)}
+                    className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
