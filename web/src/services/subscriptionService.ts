@@ -33,6 +33,15 @@ export interface SubscriptionPlan {
 export class SubscriptionService {
   private supabase = createClient()
 
+  // Fallback pricing in case database values are missing
+  private static getFallbackPricing(): { [key: string]: { monthly: number; yearly: number } } {
+    return {
+      'free': { monthly: 0, yearly: 0 },
+      'pro': { monthly: 8.99, yearly: 79.99 },
+      'premium': { monthly: 14.99, yearly: 119.99 }
+    }
+  }
+
   // Get all available subscription plans
   async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     try {
@@ -44,11 +53,20 @@ export class SubscriptionService {
 
       if (error) throw error
 
-      return data.map(plan => ({
-        ...plan,
-        createdAt: new Date(plan.created_at),
-        updatedAt: new Date(plan.updated_at)
-      }))
+      const fallbackPricing = SubscriptionService.getFallbackPricing()
+
+      return data.map(plan => {
+        // Use fallback pricing if database values are null/undefined
+        const fallback = fallbackPricing[plan.id] || { monthly: 0, yearly: 0 }
+        
+        return {
+          ...plan,
+          priceMonthly: plan.price_monthly ?? fallback.monthly,
+          priceYearly: plan.price_yearly ?? fallback.yearly,
+          createdAt: new Date(plan.created_at),
+          updatedAt: new Date(plan.updated_at)
+        }
+      })
     } catch (error) {
       console.error('Error fetching subscription plans:', error)
       throw error

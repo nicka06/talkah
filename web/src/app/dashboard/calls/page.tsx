@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubscription } from '@/hooks/useSubscription'
-import { CallService } from '@/services/callService'
+import { CallService } from '../../../services/callService'
 import { Navigation } from '@/components/shared/Navigation'
 import { BackButton } from '@/components/shared/BackButton'
 

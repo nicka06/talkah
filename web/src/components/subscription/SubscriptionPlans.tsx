@@ -21,6 +21,13 @@ export function SubscriptionPlans({
   isProcessing
 }: SubscriptionPlansProps) {
   const formatPrice = (price: number) => {
+    console.log('Formatting price:', price, 'Type:', typeof price)
+    
+    if (price === null || price === undefined || isNaN(price)) {
+      console.warn('Invalid price detected:', price)
+      return '$0'
+    }
+    
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -32,6 +39,13 @@ export function SubscriptionPlans({
     const isCurrentPlan = plan.id === currentPlanId
     const price = isYearly ? plan.priceYearly : plan.priceMonthly
     const savings = isYearly ? plan.priceMonthly * 12 - plan.priceYearly : 0
+
+    console.log(`Plan ${plan.id}:`, {
+      priceMonthly: plan.priceMonthly,
+      priceYearly: plan.priceYearly,
+      selectedPrice: price,
+      isYearly
+    })
 
     return (
       <div className={`
@@ -55,7 +69,7 @@ export function SubscriptionPlans({
               <span className="text-3xl font-bold">{formatPrice(price)}</span>
               <span className="text-gray-600 ml-2">/{isYearly ? 'year' : 'month'}</span>
             </div>
-            {isYearly && savings > 0 && (
+            {isYearly && savings > 0 && !isNaN(savings) && (
               <p className="text-sm text-green-600">
                 Save {formatPrice(savings)} per year
               </p>
@@ -92,6 +106,8 @@ export function SubscriptionPlans({
       </div>
     )
   }
+
+  console.log('All plans received:', plans)
 
   return (
     <div className={`space-y-6 ${className}`}>

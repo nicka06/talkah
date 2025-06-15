@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import Image from 'next/image'
 
 export function Navigation() {
   const router = useRouter()
@@ -35,12 +36,18 @@ export function Navigation() {
       <div className="flex items-center justify-between px-6">
         <div className="flex items-center space-x-4">
           {/* Logo */}
-          <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-lg">T</span>
+          <div className="flex items-center space-x-3">
+            <Image 
+              src="/talkah_logo.png" 
+              alt="Talkah Logo" 
+              width={48} 
+              height={48} 
+              className="rounded-full"
+            />
+            <h1 className="font-graffiti text-2xl font-bold text-black">
+              TALKAH
+            </h1>
           </div>
-          <h1 className="font-graffiti text-2xl font-bold text-black">
-            TALKAH
-          </h1>
         </div>
 
         {/* User Dropdown */}
@@ -57,22 +64,44 @@ export function Navigation() {
             )}
           </button>
           {dropdownOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white border-2 border-black rounded-xl shadow-xl z-50">
+            <div className="absolute right-0 mt-2 w-48 bg-white border-2 border-black rounded-xl shadow-xl z-50">
               <div className="px-4 py-3 border-b border-black">
-                <div className="font-semibold text-black">{user?.email || 'User'}</div>
+                <div className="font-semibold text-black text-sm truncate" title={user?.email || 'User'}>
+                  {user?.email || 'User'}
+                </div>
               </div>
               <ul className="py-2">
                 <li>
-                  <a href="/dashboard/account" className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">Account Details</a>
+                  <a 
+                    href="/dashboard/account" 
+                    className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                  >
+                    Account Details
+                  </a>
                 </li>
                 <li>
-                  <a href="/dashboard/activity" className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">History</a>
+                  <a 
+                    href="/dashboard/activity" 
+                    className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                  >
+                    History
+                  </a>
                 </li>
                 <li>
-                  <a href="/dashboard/subscription" className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">Subscription</a>
+                  <a 
+                    href="/dashboard/subscription" 
+                    className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                  >
+                    Subscription
+                  </a>
                 </li>
                 <li>
-                  <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">Sign Out</button>
+                  <button 
+                    onClick={handleSignOut} 
+                    className="w-full text-left px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                  >
+                    Sign Out
+                  </button>
                 </li>
               </ul>
             </div>

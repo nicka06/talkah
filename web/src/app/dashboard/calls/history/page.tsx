@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
-import { CallService, CallRecord } from '@/services/callService'
+import { CallService, CallRecord } from '../../../../services/callService'
 import { Navigation } from '@/components/shared/Navigation'
 import { BackButton } from '@/components/shared/BackButton'
 
