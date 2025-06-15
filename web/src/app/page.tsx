@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { Navigation } from '@/components/shared/Navigation'
 
 export default function HomePage() {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [topic, setTopic] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+  const [topicError, setTopicError] = useState('')
   const { user, loading } = useAuth()
   const router = useRouter()
 
@@ -17,10 +20,67 @@ export default function HomePage() {
     }
   }, [user, loading, router])
 
+  // Format phone number as user types
+  const formatPhoneNumber = (value: string) => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '')
+    
+    // Limit to 11 digits (1 + 10 for US numbers)
+    const limitedDigits = digits.slice(0, 11)
+    
+    // Format based on length
+    if (limitedDigits.length <= 3) {
+      return limitedDigits
+    } else if (limitedDigits.length <= 6) {
+      return `(${limitedDigits.slice(0, 3)}) ${limitedDigits.slice(3)}`
+    } else if (limitedDigits.length <= 10) {
+      return `(${limitedDigits.slice(0, 3)}) ${limitedDigits.slice(3, 6)}-${limitedDigits.slice(6)}`
+    } else {
+      // Handle 11 digits (with country code)
+      return `+${limitedDigits.slice(0, 1)} (${limitedDigits.slice(1, 4)}) ${limitedDigits.slice(4, 7)}-${limitedDigits.slice(7)}`
+    }
+  }
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value)
+    setPhoneNumber(formatted)
+    
+    // Clear error when user starts typing
+    if (phoneError) setPhoneError('')
+  }
+
+  const handleTopicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTopic(e.target.value)
+    
+    // Clear error when user starts typing
+    if (topicError) setTopicError('')
+  }
+
+  const validateInputs = () => {
+    let isValid = true
+    
+    // Validate phone number (must have at least 10 digits)
+    const digits = phoneNumber.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setPhoneError('Phone number must be at least 10 digits')
+      isValid = false
+    } else {
+      setPhoneError('')
+    }
+    
+    // Validate topic (must be at least 5 characters)
+    if (topic.trim().length < 5) {
+      setTopicError('Topic must be at least 5 characters')
+      isValid = false
+    } else {
+      setTopicError('')
+    }
+    
+    return isValid
+  }
+
   const handleCallNow = () => {
-    // Validate inputs
-    if (!phoneNumber.trim() || !topic.trim()) {
-      alert('Please enter both phone number and topic')
+    if (!validateInputs()) {
       return
     }
 
@@ -30,6 +90,7 @@ export default function HomePage() {
       topic: topic.trim(),
       timestamp: Date.now()
     }
+    
     localStorage.setItem('talkah_pending_call', JSON.stringify(callData))
 
     // Redirect to sign up page
@@ -55,33 +116,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="text-black py-4 border-b-2 border-black">
-        <div className="flex items-center justify-between px-6">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-lg">T</span>
-            </div>
-            <h1 className="font-graffiti text-2xl font-bold text-black">
-              TALKAH
-            </h1>
-          </div>
-          <nav className="flex space-x-6">
-            <a
-              href="/auth/login"
-              className="px-6 py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors"
-            >
-              Sign In
-            </a>
-            <a
-              href="/auth/signup"
-              className="px-6 py-2 rounded-lg font-semibold bg-black text-white hover:bg-gray-800 transition-colors"
-            >
-              Sign Up
-            </a>
-          </nav>
-        </div>
-      </header>
+      {/* Navigation */}
+      <Navigation />
 
       {/* Hero Section */}
       <main className="container mx-auto px-4 py-16">
@@ -97,26 +133,51 @@ export default function HomePage() {
           <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg max-w-md mx-auto border-2 border-black mb-12">
             <h3 className="font-graffiti text-2xl text-black mb-6">START TALKING NOW</h3>
             <div className="space-y-4">
-              <input
-                type="tel"
-                placeholder="Phone number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
-              />
-              <input
-                type="text"
-                placeholder="Topic to discuss"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
-              />
+              {/* Phone Number Input */}
+              <div>
+                <input
+                  type="tel"
+                  placeholder="(555) 123-4567"
+                  value={phoneNumber}
+                  onChange={handlePhoneChange}
+                  className={`w-full px-4 py-3 bg-white/5 border-2 rounded-lg focus:outline-none focus:ring-2 text-black placeholder-black/70 ${
+                    phoneError 
+                      ? 'border-red-500 focus:ring-red-500' 
+                      : 'border-black focus:ring-black'
+                  }`}
+                />
+                {phoneError && (
+                  <p className="text-red-600 text-sm mt-1 text-left">{phoneError}</p>
+                )}
+              </div>
+              
+              {/* Topic Input */}
+              <div>
+                <input
+                  type="text"
+                  placeholder="Topic to discuss (e.g., business inquiry, appointment)"
+                  value={topic}
+                  onChange={handleTopicChange}
+                  className={`w-full px-4 py-3 bg-white/5 border-2 rounded-lg focus:outline-none focus:ring-2 text-black placeholder-black/70 ${
+                    topicError 
+                      ? 'border-red-500 focus:ring-red-500' 
+                      : 'border-black focus:ring-black'
+                  }`}
+                />
+                {topicError && (
+                  <p className="text-red-600 text-sm mt-1 text-left">{topicError}</p>
+                )}
+              </div>
+              
               <button
                 onClick={handleCallNow}
                 className="w-full bg-black text-white py-3 rounded-lg font-graffiti text-xl hover:bg-gray-800 transition-colors"
               >
                 CALL NOW
               </button>
+              <p className="text-black/70 text-sm">
+                Sign up required • Free trial available
+              </p>
             </div>
           </div>
 

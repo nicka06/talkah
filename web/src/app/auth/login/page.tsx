@@ -1,32 +1,42 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, Suspense } from 'react'
 import { AuthForm } from '@/components/auth/AuthForm'
 import { useAuth } from '@/hooks/useAuth'
+import { Navigation } from '@/components/shared/Navigation'
 
-export default function SignInPage() {
+function SignInContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading, signInWithOAuth } = useAuth()
 
-  // Redirect if already signed in
+  // Redirect if already signed in - CHECK FOR PENDING CALL DATA HERE
   useEffect(() => {
     if (!loading && user) {
-      const redirectTo = searchParams.get('redirectTo') || '/dashboard'
-      router.push(redirectTo)
+      // Check if there's saved call data in localStorage
+      const savedCallData = localStorage.getItem('talkah_pending_call')
+      
+      if (savedCallData) {
+        // Redirect to calls page to complete the pending call
+        router.push('/dashboard/calls')
+      } else {
+        // Normal redirect to dashboard
+        const redirectTo = searchParams.get('redirectTo') || '/dashboard'
+        router.push(redirectTo)
+      }
     }
   }, [user, loading, router, searchParams])
 
   const handleSuccess = () => {
-    // Check if there's saved call data in localStorage
+    // This function is called for email/password auth
+    // The redirect logic is now handled in the useEffect above
+    // But we keep this for consistency
     const savedCallData = localStorage.getItem('talkah_pending_call')
     
     if (savedCallData) {
-      // Redirect to calls page to complete the pending call
       router.push('/dashboard/calls')
     } else {
-      // Normal redirect to dashboard
       const redirectTo = searchParams.get('redirectTo') || '/dashboard'
       router.push(redirectTo)
     }
@@ -56,27 +66,8 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="text-black py-4 border-b-2 border-black">
-        <div className="flex items-center justify-between px-6">
-          <a href="/" className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-lg">T</span>
-            </div>
-            <h1 className="font-graffiti text-2xl font-bold text-black">
-              TALKAH
-            </h1>
-          </a>
-          <nav className="flex space-x-6">
-            <a
-              href="/auth/signup"
-              className="px-6 py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors"
-            >
-              Sign Up
-            </a>
-          </nav>
-        </div>
-      </header>
+      {/* Navigation */}
+      <Navigation />
 
       {/* Sign In Form */}
       <main className="container mx-auto px-4 py-16">
@@ -102,5 +93,22 @@ export default function SignInPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-primary-600 font-bold text-lg">T</span>
+          </div>
+          <p className="text-white">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SignInContent />
+    </Suspense>
   )
 } 

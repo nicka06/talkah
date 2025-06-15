@@ -28,6 +28,39 @@ export default function CallsPage() {
     }
   }, [user, authLoading, router])
 
+  // Check for pending call data from homepage signup flow
+  useEffect(() => {
+    if (user && !authLoading) {
+      const pendingCallData = localStorage.getItem('talkah_pending_call')
+      
+      if (pendingCallData) {
+        try {
+          const callData = JSON.parse(pendingCallData)
+          
+          // Check if data is recent (within 30 minutes)
+          const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000)
+          if (callData.timestamp && callData.timestamp > thirtyMinutesAgo) {
+            setPhoneNumber(callData.phoneNumber || '')
+            setTopic(callData.topic || '')
+            
+            // Show a welcome message
+            showSuccess(
+              'Welcome to TALKAH!', 
+              'We\'ve pre-filled your call details. Review and click "INITIATE CALL" when ready.',
+              { duration: 6000 }
+            )
+          }
+          
+          // Clear the stored data regardless of age
+          localStorage.removeItem('talkah_pending_call')
+        } catch (error) {
+          console.error('Error parsing pending call data:', error)
+          localStorage.removeItem('talkah_pending_call')
+        }
+      }
+    }
+  }, [user, authLoading, showSuccess])
+
   // Get current plan ID
   useEffect(() => {
     const fetchCurrentPlan = async () => {
@@ -41,16 +74,19 @@ export default function CallsPage() {
     // Remove all non-digits
     const cleaned = value.replace(/\D/g, '')
     
-    // Limit to 10 digits
-    const limited = cleaned.slice(0, 10)
+    // Limit to 11 digits (handle country code)
+    const limited = cleaned.slice(0, 11)
     
-    // Format as (XXX) XXX-XXXX
-    if (limited.length >= 6) {
-      return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`
-    } else if (limited.length >= 3) {
-      return `(${limited.slice(0, 3)}) ${limited.slice(3)}`
-    } else {
+    // Format based on length
+    if (limited.length <= 3) {
       return limited
+    } else if (limited.length <= 6) {
+      return `(${limited.slice(0, 3)}) ${limited.slice(3)}`
+    } else if (limited.length <= 10) {
+      return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`
+    } else {
+      // Handle 11 digits (with country code)
+      return `+${limited.slice(0, 1)} (${limited.slice(1, 4)}) ${limited.slice(4, 7)}-${limited.slice(7)}`
     }
   }
 
@@ -61,12 +97,16 @@ export default function CallsPage() {
 
   const validateInputs = () => {
     const cleanPhone = phoneNumber.replace(/\D/g, '')
-    if (cleanPhone.length !== 10) {
-      showError('Invalid Phone Number', 'Please enter a valid 10-digit phone number')
+    if (cleanPhone.length < 10) {
+      showError('Invalid Phone Number', 'Please enter a valid phone number with at least 10 digits')
       return false
     }
     if (!topic.trim()) {
       showError('Missing Topic', 'Please enter a topic to discuss')
+      return false
+    }
+    if (topic.trim().length < 5) {
+      showError('Topic Too Short', 'Please provide more details about what you want to discuss')
       return false
     }
     return true
@@ -88,7 +128,7 @@ export default function CallsPage() {
 
       // Format phone number for API call
       const cleanPhone = phoneNumber.replace(/\D/g, '')
-      const formattedPhone = `+1${cleanPhone}`
+      const formattedPhone = cleanPhone.length === 11 ? `+${cleanPhone}` : `+1${cleanPhone}`
 
       const result = await CallService.initiateCall({
         phoneNumber: formattedPhone,

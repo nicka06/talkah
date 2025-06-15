@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubscription } from '@/hooks/useSubscription'
@@ -11,7 +11,7 @@ import { Navigation } from '@/components/shared/Navigation'
 import { BackButton } from '@/components/shared/BackButton'
 import { useToastContext } from '@/contexts/ToastContext'
 
-export default function SubscriptionPage() {
+function SubscriptionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading: authLoading } = useAuth()
@@ -167,5 +167,22 @@ export default function SubscriptionPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function SubscriptionPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#DC2626]">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-primary-600 font-bold text-lg">T</span>
+          </div>
+          <p className="text-white">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SubscriptionContent />
+    </Suspense>
   )
 } 

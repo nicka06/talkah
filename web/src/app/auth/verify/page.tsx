@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useToastContext } from '@/contexts/ToastContext'
@@ -8,7 +8,7 @@ import Image from 'next/image'
 
 type VerificationState = 'loading' | 'success' | 'error' | 'password_reset'
 
-export default function VerifyPage() {
+function VerifyContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showSuccess, showError } = useToastContext()
@@ -278,5 +278,33 @@ export default function VerifyPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#DC2626] flex items-center justify-center px-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black text-center">
+            <div className="flex justify-center mb-6">
+              <Image 
+                src="/talkah_logo.png" 
+                alt="Talkah Logo" 
+                width={64} 
+                height={64} 
+                className="rounded-full"
+              />
+            </div>
+            <h1 className="font-graffiti text-3xl font-bold text-black mb-6">Loading...</h1>
+            <div className="flex justify-center">
+              <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <VerifyContent />
+    </Suspense>
   )
 } 
