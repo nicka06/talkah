@@ -78,7 +78,7 @@ export default function DashboardPage() {
                     <a href="/dashboard/activity" className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">History</a>
                   </li>
                   <li>
-                    <a href="/dashboard/account" className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">Subscription</a>
+                    <a href="/dashboard/subscription" className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">Subscription</a>
                   </li>
                   <li>
                     <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-black hover:bg-black/10 rounded transition-colors">Sign Out</button>
