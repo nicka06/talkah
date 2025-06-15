@@ -14,20 +14,22 @@ const SENDGRID_FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL")!;
 // @ts-ignore
 const OPENAI_API_KEY = Deno.env.get("OpenAI_Key")!;
 
+// CORS headers for all responses
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Content-Type': 'application/json'
+};
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { 
-      headers: { 
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
-      }
-    });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' }
+      headers: corsHeaders
     });
   }
 
@@ -36,7 +38,7 @@ serve(async (req: Request) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -51,7 +53,7 @@ serve(async (req: Request) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -60,7 +62,7 @@ serve(async (req: Request) => {
     if (!recipient_email || !subject) {
       return new Response(JSON.stringify({ error: 'recipient_email and subject are required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -89,7 +91,7 @@ serve(async (req: Request) => {
         usage_limit_reached: true 
       }), {
         status: 403,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -124,7 +126,7 @@ serve(async (req: Request) => {
         console.error('OpenAI API error:', await openaiResponse.text());
         return new Response(JSON.stringify({ error: 'Failed to generate email content' }), {
           status: 500,
-          headers: { 'Content-Type': 'application/json' }
+          headers: corsHeaders
         });
       }
 
@@ -135,7 +137,7 @@ serve(async (req: Request) => {
       if (!emailContent) {
         return new Response(JSON.stringify({ error: 'Failed to generate email content' }), {
           status: 500,
-          headers: { 'Content-Type': 'application/json' }
+          headers: corsHeaders
         });
       }
     }
@@ -197,7 +199,7 @@ serve(async (req: Request) => {
       console.error('Save email error:', saveError);
       return new Response(JSON.stringify({ error: 'Failed to save email record' }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: corsHeaders
       });
     }
 
@@ -216,14 +218,14 @@ serve(async (req: Request) => {
       email_id: emailRecord.id,
       generated_content: type === 'ai_generated' ? emailContent : undefined
     }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: corsHeaders
     });
 
   } catch (error) {
     console.error('Error:', error);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: corsHeaders
     });
   }
 });

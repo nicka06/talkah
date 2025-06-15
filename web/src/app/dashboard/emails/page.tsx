@@ -4,19 +4,21 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubscription } from '@/hooks/useSubscription'
-import { CallService } from '../../../services/callService'
+import { EmailService } from '../../../services/emailService'
 import { Navigation } from '@/components/shared/Navigation'
 import { BackButton } from '@/components/shared/BackButton'
 import { SubscriptionPopup } from '@/components/subscription/SubscriptionPopup'
 import { useToastContext } from '@/contexts/ToastContext'
 
-export default function CallsPage() {
+export default function EmailsPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const { usage, plans, loading: subscriptionLoading, getCurrentPlanId } = useSubscription()
   const { showSuccess, showError } = useToastContext()
-  const [phoneNumber, setPhoneNumber] = useState('')
+  const [recipientEmail, setRecipientEmail] = useState('')
+  const [subject, setSubject] = useState('')
   const [topic, setTopic] = useState('')
+  const [fromEmailLocal, setFromEmailLocal] = useState('hello')
   const [isProcessing, setIsProcessing] = useState(false)
   const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false)
   const [currentPlanId, setCurrentPlanId] = useState<string>('free')
@@ -37,83 +39,69 @@ export default function CallsPage() {
     fetchCurrentPlan()
   }, [getCurrentPlanId])
 
-  const formatPhoneNumber = (value: string) => {
-    // Remove all non-digits
-    const cleaned = value.replace(/\D/g, '')
-    
-    // Limit to 10 digits
-    const limited = cleaned.slice(0, 10)
-    
-    // Format as (XXX) XXX-XXXX
-    if (limited.length >= 6) {
-      return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`
-    } else if (limited.length >= 3) {
-      return `(${limited.slice(0, 3)}) ${limited.slice(3)}`
-    } else {
-      return limited
-    }
-  }
-
-  const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value)
-    setPhoneNumber(formatted)
-  }
-
   const validateInputs = () => {
-    const cleanPhone = phoneNumber.replace(/\D/g, '')
-    if (cleanPhone.length !== 10) {
-      showError('Invalid Phone Number', 'Please enter a valid 10-digit phone number')
+    if (!EmailService.validateEmail(recipientEmail)) {
+      showError('Invalid Email', 'Please enter a valid recipient email address')
+      return false
+    }
+    if (!subject.trim()) {
+      showError('Missing Subject', 'Please enter an email subject')
       return false
     }
     if (!topic.trim()) {
-      showError('Missing Topic', 'Please enter a topic to discuss')
+      showError('Missing Topic', 'Please describe what the email should be about')
+      return false
+    }
+    if (topic.trim().length < 10) {
+      showError('Topic Too Short', 'Please provide more details about the email topic (at least 10 characters)')
       return false
     }
     return true
   }
 
-  const handleInitiateCall = async () => {
+  const handleSendEmail = async () => {
     if (!validateInputs() || isProcessing || !user) return
 
     try {
       setIsProcessing(true)
 
-      // Check if user can make a call BEFORE making the API call
-      const phoneCallsRemaining = usage ? (usage.phoneCallsLimit === -1 ? Infinity : usage.phoneCallsLimit - usage.phoneCallsUsed) : 0
-      if (phoneCallsRemaining <= 0) {
-        // Show subscription popup instead of toast
+      // Check if user can send an email BEFORE making the API call
+      const emailsRemaining = usage ? (usage.emailsLimit === -1 ? Infinity : usage.emailsLimit - usage.emailsUsed) : 0
+      if (emailsRemaining <= 0) {
+        // Show subscription popup instead of error
         setShowSubscriptionPopup(true)
         return
       }
 
-      // Format phone number for API call
-      const cleanPhone = phoneNumber.replace(/\D/g, '')
-      const formattedPhone = `+1${cleanPhone}`
+      // Format the from email
+      const fromEmail = EmailService.formatFromEmail(fromEmailLocal)
 
-      const result = await CallService.initiateCall({
-        phoneNumber: formattedPhone,
+      const result = await EmailService.sendEmail({
+        recipientEmail: recipientEmail.trim(),
+        subject: subject.trim(),
         topic: topic.trim(),
-        userId: user.id,
-        email: user.email!
+        fromEmail
       })
 
-      if (result) {
+      if (result?.success) {
         // Show success message
         showSuccess(
-          'Call Initiated!', 
-          'You should receive a call shortly. We\'ll connect you once the call is answered.',
+          'Email Sent!', 
+          'Your AI-generated email has been sent successfully.',
           { duration: 8000 }
         )
         
         // Clear form
-        setPhoneNumber('')
+        setRecipientEmail('')
+        setSubject('')
         setTopic('')
+        setFromEmailLocal('hello')
       } else {
-        showError('Call Failed', 'Failed to initiate call. Please check your inputs and try again.')
+        showError('Email Failed', 'Failed to send email. Please check your inputs and try again.')
       }
     } catch (error) {
-      console.error('Error initiating call:', error)
-      showError('Call Error', 'Failed to initiate call. Please try again or contact support if the problem persists.')
+      console.error('Error sending email:', error)
+      showError('Email Error', 'Failed to send email. Please try again or contact support if the problem persists.')
     } finally {
       setIsProcessing(false)
     }
@@ -146,50 +134,90 @@ export default function CallsPage() {
           </div>
 
           <h1 className="font-graffiti text-5xl md:text-6xl font-bold text-black mb-6">
-            PHONE CALLS
+            AI EMAILS
           </h1>
           <p className="text-xl text-black/90 mb-8">
-            AI-powered conversations with anyone, anywhere
+            AI-powered professional emails generated instantly
           </p>
 
-          {/* Call Form */}
+          {/* Email Form */}
           <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black">
             <div className="space-y-6">
-              {/* Phone Number Input */}
+              {/* Recipient Email Input */}
               <div>
-                <label htmlFor="phoneNumber" className="block text-left text-black font-semibold mb-2">
-                  Phone Number
+                <label htmlFor="recipientEmail" className="block text-left text-black font-semibold mb-2">
+                  Recipient Email
                 </label>
                 <input
-                  id="phoneNumber"
-                  type="tel"
-                  placeholder="(555) 123-4567"
-                  value={phoneNumber}
-                  onChange={handlePhoneNumberChange}
+                  id="recipientEmail"
+                  type="email"
+                  placeholder="recipient@example.com"
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
                   className="w-full px-4 py-3 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
                   disabled={isProcessing}
                 />
               </div>
 
+              {/* Subject Input */}
+              <div>
+                <label htmlFor="subject" className="block text-left text-black font-semibold mb-2">
+                  Subject
+                </label>
+                <input
+                  id="subject"
+                  type="text"
+                  placeholder="Email subject line"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
+                  disabled={isProcessing}
+                />
+              </div>
+
+              {/* From Email Input */}
+              <div>
+                <label htmlFor="fromEmail" className="block text-left text-black font-semibold mb-2">
+                  From Email
+                </label>
+                <div className="flex items-center">
+                  <input
+                    id="fromEmail"
+                    type="text"
+                    placeholder="hello"
+                    value={fromEmailLocal}
+                    onChange={(e) => setFromEmailLocal(e.target.value)}
+                    className="flex-1 px-4 py-3 bg-white/5 border-2 border-black rounded-l-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
+                    disabled={isProcessing}
+                  />
+                  <div className="px-4 py-3 bg-black/10 border-2 border-l-0 border-black rounded-r-lg text-black font-semibold">
+                    @talkah.com
+                  </div>
+                </div>
+              </div>
+
               {/* Topic Input */}
               <div>
                 <label htmlFor="topic" className="block text-left text-black font-semibold mb-2">
-                  Topic to Discuss
+                  Email Topic
                 </label>
+                <p className="text-left text-black/70 text-sm mb-2">
+                  AI will generate professional email content based on this topic
+                </p>
                 <textarea
                   id="topic"
-                  placeholder="What would you like to talk about?"
+                  placeholder="Describe what you want the email to be about..."
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  rows={3}
+                  rows={4}
                   className="w-full px-4 py-3 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 resize-none"
                   disabled={isProcessing}
                 />
               </div>
 
-              {/* Call Button - Always enabled */}
+              {/* Send Button - Always enabled */}
               <button
-                onClick={handleInitiateCall}
+                onClick={handleSendEmail}
                 disabled={isProcessing}
                 className={`
                   w-full py-4 rounded-lg font-graffiti text-xl transition-colors
@@ -202,10 +230,10 @@ export default function CallsPage() {
                 {isProcessing ? (
                   <div className="flex items-center justify-center space-x-2">
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>INITIATING CALL...</span>
+                    <span>GENERATING & SENDING...</span>
                   </div>
                 ) : (
-                  'START CALL'
+                  'GENERATE & SEND EMAIL'
                 )}
               </button>
             </div>
