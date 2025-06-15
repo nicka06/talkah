@@ -1,14 +1,14 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { AuthForm } from '@/components/auth/AuthForm'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function SignInPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, loading } = useAuth()
+  const { user, loading, signInWithOAuth } = useAuth()
 
   // Redirect if already signed in
   useEffect(() => {
@@ -31,6 +31,11 @@ export default function SignInPage() {
       router.push(redirectTo)
     }
   }
+
+  // OAuth handler for Google and Apple
+  const handleOAuth = useCallback(async (provider: 'google' | 'apple') => {
+    await signInWithOAuth(provider);
+  }, [signInWithOAuth]);
 
   if (loading) {
     return (
@@ -84,13 +89,13 @@ export default function SignInPage() {
               <div className="flex-grow border-t border-black" />
             </div>
             <div className="space-y-3">
-              <button className="w-full flex items-center justify-center border-2 border-black text-black font-semibold py-2 rounded-lg hover:bg-black hover:text-white transition-colors">
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48"><g><path fill="#4285F4" d="M24 9.5c3.54 0 6.36 1.53 7.82 2.81l5.74-5.74C34.36 3.36 29.64 1 24 1 14.82 1 6.98 6.98 3.69 15.09l6.67 5.18C12.13 14.09 17.62 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.5c0-1.64-.15-3.22-.42-4.74H24v9.04h12.42c-.54 2.9-2.16 5.36-4.6 7.04l7.1 5.52C43.98 37.02 46.1 31.18 46.1 24.5z"/><path fill="#FBBC05" d="M10.36 28.27c-1.04-3.09-1.04-6.45 0-9.54l-6.67-5.18C1.1 17.36 0 20.57 0 24c0 3.43 1.1 6.64 3.69 10.45l6.67-5.18z"/><path fill="#EA4335" d="M24 46.5c5.64 0 10.36-1.87 13.8-5.09l-7.1-5.52c-1.97 1.33-4.5 2.11-6.7 2.11-6.38 0-11.87-4.59-13.64-10.77l-6.67 5.18C6.98 41.02 14.82 46.5 24 46.5z"/></g></svg>
+              <button onClick={() => handleOAuth('google')} className="w-full flex items-center justify-center border-2 border-black text-black font-semibold py-2 rounded-lg hover:bg-black hover:text-white transition-colors">
+                <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48"><g><path fill='#4285F4' d='M24 9.5c3.54 0 6.36 1.53 7.82 2.81l5.74-5.74C34.36 3.36 29.64 1 24 1 14.82 1 6.98 6.98 3.69 15.09l6.67 5.18C12.13 14.09 17.62 9.5 24 9.5z'/><path fill='#34A853' d='M46.1 24.5c0-1.64-.15-3.22-.42-4.74H24v9.04h12.42c-.54 2.9-2.16 5.36-4.6 7.04l7.1 5.52C43.98 37.02 46.1 31.18 46.1 24.5z'/><path fill='#FBBC05' d='M10.36 28.27c-1.04-3.09-1.04-6.45 0-9.54l-6.67-5.18C1.1 17.36 0 20.57 0 24c0 3.43 1.1 6.64 3.69 10.45l6.67-5.18z'/><path fill='#EA4335' d='M24 46.5c5.64 0 10.36-1.87 13.8-5.09l-7.1-5.52c-1.97 1.33-4.5 2.11-6.7 2.11-6.38 0-11.87-4.59-13.64-10.77l-6.67 5.18C6.98 41.02 14.82 46.5 24 46.5z'/></g></svg>
                 Sign in with Google
               </button>
-              <button className="w-full flex items-center justify-center border-2 border-black text-black font-semibold py-2 rounded-lg hover:bg-black hover:text-white transition-colors">
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48"><g><path fill="#24292F" d="M24 1C11.85 1 2 10.85 2 23c0 9.74 6.28 17.98 15.01 20.88 1.1.2 1.5-.48 1.5-1.07 0-.53-.02-1.93-.03-3.79-6.1 1.33-7.39-2.94-7.39-2.94-1-2.54-2.44-3.22-2.44-3.22-2-1.37.15-1.34.15-1.34 2.21.16 3.38 2.27 3.38 2.27 1.96 3.36 5.15 2.39 6.41 1.83.2-1.42.77-2.39 1.4-2.94-4.87-.55-10-2.44-10-10.87 0-2.4.86-4.36 2.27-5.89-.23-.56-.99-2.8.22-5.84 0 0 1.84-.59 6.03 2.25A20.9 20.9 0 0124 13.5c1.87.01 3.76.25 5.53.73 4.19-2.84 6.03-2.25 6.03-2.25 1.21 3.04.45 5.28.22 5.84 1.41 1.53 2.27 3.49 2.27 5.89 0 8.45-5.14 10.31-10.03 10.85.79.68 1.5 2.03 1.5 4.09 0 2.95-.03 5.33-.03 6.06 0 .59.39 1.28 1.51 1.06C41.72 40.97 48 32.73 48 23c0-12.15-9.85-22-22-22z"/></g></svg>
-                Sign in with GitHub
+              <button onClick={() => handleOAuth('apple')} className="w-full flex items-center justify-center border-2 border-black text-black font-semibold py-2 rounded-lg hover:bg-black hover:text-white transition-colors">
+                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M16.365 1.43c0 1.14-.93 2.07-2.07 2.07-.06 0-.12 0-.18-.01-.01-.06-.01-.13-.01-.19 0-1.13.92-2.06 2.06-2.06.07 0 .13 0 .19.01.01.06.01.13.01.18zm4.13 6.98c-.06-.05-1.19-.86-2.48-.85-1.01.01-1.44.48-2.7.48-1.25 0-1.67-.47-2.7-.48-1.3-.01-2.48.8-2.54.85-.7.5-2.01 1.78-2.01 4.09 0 3.01 2.36 6.13 4.2 6.13.8 0 1.13-.46 2.13-.46 1 0 1.29.46 2.13.46 1.85 0 4.2-3.12 4.2-6.13 0-2.31-1.31-3.59-2.01-4.09z"/></svg>
+                Sign in with Apple
               </button>
             </div>
           </div>
