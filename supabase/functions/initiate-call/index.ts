@@ -31,14 +31,16 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // @ts-ignore
 const FUNCTIONS_BASE_URL = Deno.env.get("FUNCTIONS_BASE_URL")!;
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 serve(async (req: Request) => {
   // 1. Handle CORS if needed (especially for local testing from a browser/Flutter app)
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: { 
-      "Access-Control-Allow-Origin": "*", // Be more specific in production
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
-    }});
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -47,7 +49,7 @@ serve(async (req: Request) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
 
@@ -63,7 +65,7 @@ serve(async (req: Request) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
 
@@ -75,7 +77,7 @@ serve(async (req: Request) => {
     if (!user_phone_number || !topic) {
       return new Response(
         JSON.stringify({ error: "Missing user_phone_number or topic" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
 
@@ -101,7 +103,7 @@ serve(async (req: Request) => {
         usage_limit_reached: true 
       }), {
         status: 403,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
 
@@ -148,7 +150,7 @@ serve(async (req: Request) => {
       // Optional: Try to cancel/update the Twilio call if DB write fails critically
       return new Response(
         JSON.stringify({ error: "Failed to store call record", details: dbError.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
 
@@ -157,14 +159,14 @@ serve(async (req: Request) => {
     // 10. Return success response
     return new Response(
       JSON.stringify({ success: true, message: "Call initiated successfully!", twilio_call_sid: call.sid, call_record_id: callRecord.id }),
-      { headers: { "Content-Type": "application/json" } },
+      { headers: { "Content-Type": "application/json", ...corsHeaders } },
     );
 
   } catch (error) {
     console.error("Error in initiate-call function:", error);
     return new Response(
       JSON.stringify({ error: "Internal server error", details: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
     );
   }
 });
