@@ -186,152 +186,160 @@ function VerifyContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#DC2626] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#DC2626] flex items-center justify-center px-4 py-8">
       <div className="max-w-md w-full">
         {/* Main Card */}
-        <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black text-center">
+        <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg border-2 border-black text-center">
           {/* Logo */}
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4 sm:mb-6">
             <Image 
               src="/talkah_logo.png" 
               alt="Talkah Logo" 
               width={64} 
               height={64} 
-              className="rounded-full"
+              className="w-12 h-12 sm:w-16 sm:h-16 rounded-full"
             />
           </div>
 
-          <h1 className="font-graffiti text-3xl font-bold text-black mb-6">
-            {state === 'password_reset' ? 'Reset Password' : 'Email Verification'}
-          </h1>
-
+          {/* Status Icon and Title */}
           {state === 'loading' && (
-            <div className="space-y-4">
-              <div className="flex justify-center">
-                <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-              </div>
-              <p className="text-black">Verifying...</p>
-            </div>
-          )}
-
-          {state === 'password_reset' && (
-            <div className="space-y-6 text-left">
-              <p className="text-black text-center">{message}</p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-black font-semibold mb-2">New Password</label>
-                  <input
-                    type="password"
-                    value={passwordForm.password}
-                    onChange={(e) => setPasswordForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="Enter your new password"
-                    className="w-full px-4 py-3 border-2 border-black rounded-lg focus:border-red-500 focus:outline-none"
-                    disabled={isUpdatingPassword}
-                  />
+            <>
+              <div className="mb-4 sm:mb-6">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-black rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
                 </div>
-                
-                <div>
-                  <label className="block text-black font-semibold mb-2">Confirm New Password</label>
-                  <input
-                    type="password"
-                    value={passwordForm.confirmPassword}
-                    onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                    placeholder="Confirm your new password"
-                    className="w-full px-4 py-3 border-2 border-black rounded-lg focus:border-red-500 focus:outline-none"
-                    disabled={isUpdatingPassword}
-                  />
-                </div>
+                <h1 className="font-graffiti text-2xl sm:text-3xl font-bold text-black mb-2">
+                  VERIFYING...
+                </h1>
+                <p className="text-black/80 text-sm sm:text-base">
+                  Please wait while we verify your request
+                </p>
               </div>
-              
-              <div className="space-y-3">
-                <button
-                  onClick={handlePasswordReset}
-                  disabled={isUpdatingPassword}
-                  className="w-full px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-semibold disabled:opacity-50"
-                >
-                  {isUpdatingPassword ? 'Updating Password...' : 'Reset Password'}
-                </button>
-                <button
-                  onClick={handleReturnToLogin}
-                  className="w-full px-6 py-3 border-2 border-black text-black rounded-lg hover:bg-black hover:text-white transition-colors font-semibold"
-                >
-                  Back to Login
-                </button>
-              </div>
-            </div>
+            </>
           )}
 
           {state === 'success' && (
-            <div className="space-y-6">
-              <div className="flex justify-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <>
+              <div className="mb-4 sm:mb-6">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-black mb-2">Success!</h2>
-                <p className="text-black/90 mb-6">{message}</p>
-                <p className="text-black/70 text-sm mb-6">
-                  You will be redirected in a few seconds...
+                <h1 className="font-graffiti text-2xl sm:text-3xl font-bold text-black mb-2">
+                  VERIFIED!
+                </h1>
+                <p className="text-black/80 text-sm sm:text-base mb-4 sm:mb-6">
+                  {message}
                 </p>
-              </div>
-              <div className="space-y-3">
-                {message.includes('password') ? (
+                <div className="space-y-3">
                   <button
-                    onClick={handleReturnToLogin}
-                    className="w-full px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-semibold"
+                    onClick={handleReturnToDashboard}
+                    className="w-full bg-black text-white py-3 rounded-lg font-graffiti text-lg hover:bg-gray-800 transition-colors touch-manipulation"
                   >
-                    Go to Login
+                    GO TO DASHBOARD
                   </button>
-                ) : (
                   <button
                     onClick={handleReturnToAccount}
-                    className="w-full px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-semibold"
+                    className="w-full bg-white/20 text-black border-2 border-black py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors text-sm sm:text-base touch-manipulation"
                   >
-                    Go to Account Settings
+                    Return to Account Settings
                   </button>
-                )}
-                <button
-                  onClick={handleReturnToDashboard}
-                  className="w-full px-6 py-3 border-2 border-black text-black rounded-lg hover:bg-black hover:text-white transition-colors font-semibold"
-                >
-                  Go to Dashboard
-                </button>
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {state === 'error' && (
-            <div className="space-y-6">
-              <div className="flex justify-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <>
+              <div className="mb-4 sm:mb-6">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </div>
+                <h1 className="font-graffiti text-2xl sm:text-3xl font-bold text-black mb-2">
+                  VERIFICATION FAILED
+                </h1>
+                <p className="text-black/80 text-sm sm:text-base mb-4 sm:mb-6">
+                  {message}
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleReturnToLogin}
+                    className="w-full bg-black text-white py-3 rounded-lg font-graffiti text-lg hover:bg-gray-800 transition-colors touch-manipulation"
+                  >
+                    BACK TO LOGIN
+                  </button>
+                  <button
+                    onClick={handleReturnToAccount}
+                    className="w-full bg-white/20 text-black border-2 border-black py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors text-sm sm:text-base touch-manipulation"
+                  >
+                    Account Settings
+                  </button>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-black mb-2">Verification Failed</h2>
-                <p className="text-black/90 mb-6">{message}</p>
+            </>
+          )}
+
+          {state === 'password_reset' && (
+            <>
+              <div className="mb-4 sm:mb-6">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-3a1 1 0 011-1h2.586l6.243-6.243C11.645 9.38 11 8.38 11 7.111A6 6 0 0117 1z" />
+                  </svg>
+                </div>
+                <h1 className="font-graffiti text-2xl sm:text-3xl font-bold text-black mb-2">
+                  RESET PASSWORD
+                </h1>
+                <p className="text-black/80 text-sm sm:text-base mb-4 sm:mb-6">
+                  {message}
+                </p>
+                
+                <div className="space-y-4 text-left">
+                  <div>
+                    <label htmlFor="password" className="block text-black font-semibold mb-2 text-sm sm:text-base">
+                      New Password
+                    </label>
+                    <input
+                      id="password"
+                      type="password"
+                      placeholder="Enter new password"
+                      value={passwordForm.password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })}
+                      className="w-full px-4 py-4 bg-white/20 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
+                      disabled={isUpdatingPassword}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-black font-semibold mb-2 text-sm sm:text-base">
+                      Confirm Password
+                    </label>
+                    <input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="Confirm new password"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      className="w-full px-4 py-4 bg-white/20 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
+                      disabled={isUpdatingPassword}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={handlePasswordReset}
+                    disabled={isUpdatingPassword || !passwordForm.password || !passwordForm.confirmPassword}
+                    className="w-full bg-black text-white py-4 rounded-lg font-graffiti text-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                  >
+                    {isUpdatingPassword ? 'UPDATING...' : 'UPDATE PASSWORD'}
+                  </button>
+                </div>
               </div>
-              <div className="space-y-3">
-                <button
-                  onClick={handleReturnToLogin}
-                  className="w-full px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-semibold"
-                >
-                  Back to Login
-                </button>
-                <button
-                  onClick={handleReturnToDashboard}
-                  className="w-full px-6 py-3 border-2 border-black text-black rounded-lg hover:bg-black hover:text-white transition-colors font-semibold"
-                >
-                  Go to Dashboard
-                </button>
-              </div>
-            </div>
+            </>
           )}
         </div>
 

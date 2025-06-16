@@ -178,26 +178,26 @@ export default function CallsPage() {
       <Navigation />
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-16">
+      <main className="container mx-auto px-4 py-8 sm:py-16">
         <div className="text-center max-w-2xl mx-auto">
           {/* Back Button */}
-          <div className="flex justify-start mb-8">
+          <div className="flex justify-start mb-6 sm:mb-8">
             <BackButton text="Dashboard" href="/dashboard" />
           </div>
 
-          <h1 className="font-graffiti text-5xl md:text-6xl font-bold text-black mb-6">
+          <h1 className="font-graffiti text-3xl sm:text-5xl md:text-6xl font-bold text-black mb-4 sm:mb-6">
             PHONE CALLS
           </h1>
-          <p className="text-xl text-black/90 mb-8">
+          <p className="text-lg sm:text-xl text-black/90 mb-6 sm:mb-8 px-2">
             AI-powered conversations with anyone, anywhere
           </p>
 
           {/* Call Form */}
-          <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black">
+          <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg border-2 border-black">
             <div className="space-y-6">
               {/* Phone Number Input */}
               <div>
-                <label htmlFor="phoneNumber" className="block text-left text-black font-semibold mb-2">
+                <label htmlFor="phoneNumber" className="block text-left text-black font-semibold mb-2 text-sm sm:text-base">
                   Phone Number
                 </label>
                 <input
@@ -206,48 +206,56 @@ export default function CallsPage() {
                   placeholder="(555) 123-4567"
                   value={phoneNumber}
                   onChange={handlePhoneNumberChange}
-                  className="w-full px-4 py-3 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
+                  className="w-full px-4 py-4 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
                   disabled={isProcessing}
+                  inputMode="tel"
+                  autoComplete="tel"
                 />
               </div>
 
               {/* Topic Input */}
               <div>
-                <label htmlFor="topic" className="block text-left text-black font-semibold mb-2">
+                <label htmlFor="topic" className="block text-left text-black font-semibold mb-2 text-sm sm:text-base">
                   Topic to Discuss
                 </label>
                 <textarea
                   id="topic"
-                  placeholder="What would you like to talk about?"
+                  placeholder="What would you like to discuss? Be specific..."
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-3 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 resize-none"
+                  className="w-full px-4 py-4 bg-white/5 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 min-h-[100px] text-base"
                   disabled={isProcessing}
+                  rows={4}
                 />
               </div>
 
-              {/* Call Button - Always enabled */}
+              {/* Usage Stats - Mobile Optimized */}
+              {usage && (
+                <div className="bg-white/20 border border-black/20 rounded-lg p-4">
+                  <div className="text-center">
+                    <p className="text-black/90 font-semibold text-sm sm:text-base">
+                      {usage.phoneCallsLimit === -1 
+                        ? '∞ calls remaining' 
+                        : `${usage.phoneCallsLimit - usage.phoneCallsUsed} of ${usage.phoneCallsLimit} calls remaining`
+                      }
+                    </p>
+                    <p className="text-black/70 text-xs sm:text-sm mt-1">Current Plan: {currentPlanId.charAt(0).toUpperCase() + currentPlanId.slice(1)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Call Button */}
               <button
                 onClick={handleInitiateCall}
-                disabled={isProcessing}
-                className={`
-                  w-full py-4 rounded-lg font-graffiti text-xl transition-colors
-                  ${isProcessing
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    : 'bg-black text-white hover:bg-gray-800'
-                  }
-                `}
+                disabled={isProcessing || !phoneNumber.trim() || !topic.trim()}
+                className="w-full bg-black text-white py-4 rounded-lg font-graffiti text-lg sm:text-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
               >
-                {isProcessing ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>INITIATING CALL...</span>
-                  </div>
-                ) : (
-                  'START CALL'
-                )}
+                {isProcessing ? 'INITIATING CALL...' : 'INITIATE CALL'}
               </button>
+
+              <p className="text-black/70 text-xs sm:text-sm text-center">
+                You will receive a call shortly after clicking "Initiate Call"
+              </p>
             </div>
           </div>
         </div>

@@ -31,19 +31,19 @@ export function Navigation() {
   }
 
   return (
-    <header className="text-black py-4 border-b-2 border-black">
-      <div className="flex items-center justify-between px-6">
-        <div className="flex items-center space-x-4">
+    <header className="text-black py-3 sm:py-4 border-b-2 border-black">
+      <div className="flex items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center space-x-2 sm:space-x-4">
           {/* Logo */}
-          <a href="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+          <a href="/" className="flex items-center space-x-2 sm:space-x-3 hover:opacity-80 transition-opacity">
             <img 
               src="/talkah_logo.png" 
               alt="Talkah Logo" 
-              width={48} 
-              height={48} 
-              className="rounded-full object-cover"
+              width={40} 
+              height={40} 
+              className="w-8 h-8 sm:w-12 sm:h-12 rounded-full object-cover"
             />
-            <h1 className="font-graffiti text-2xl font-bold text-black">
+            <h1 className="font-graffiti text-lg sm:text-2xl font-bold text-black">
               TALKAH
             </h1>
           </a>
@@ -54,14 +54,14 @@ export function Navigation() {
           /* User Dropdown for authenticated users */
           <div className="relative" ref={dropdownRef}>
             <button
-              className="w-12 h-12 rounded-full border-2 border-black flex items-center justify-center bg-white hover:bg-black/10 transition-colors focus:outline-none"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-black flex items-center justify-center bg-white hover:bg-black/10 transition-colors focus:outline-none touch-manipulation"
               onClick={() => setDropdownOpen((open) => !open)}
               aria-label="Open profile menu"
             >
               {user?.user_metadata?.avatar_url ? (
-                <img src={user.user_metadata.avatar_url} alt="Profile" className="w-10 h-10 rounded-full object-cover" />
+                <img src={user.user_metadata.avatar_url} alt="Profile" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover" />
               ) : (
-                <span className="text-black font-bold text-lg">{user?.email?.[0]?.toUpperCase() || 'U'}</span>
+                <span className="text-black font-bold text-sm sm:text-lg">{user?.email?.[0]?.toUpperCase() || 'U'}</span>
               )}
             </button>
             {dropdownOpen && (
@@ -75,7 +75,7 @@ export function Navigation() {
                   <li>
                     <a 
                       href="/dashboard/account" 
-                      className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                      className="block px-4 py-3 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap touch-manipulation"
                     >
                       Account Details
                     </a>
@@ -83,7 +83,7 @@ export function Navigation() {
                   <li>
                     <a 
                       href="/dashboard/activity" 
-                      className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                      className="block px-4 py-3 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap touch-manipulation"
                     >
                       History
                     </a>
@@ -91,7 +91,7 @@ export function Navigation() {
                   <li>
                     <a 
                       href="/dashboard/subscription" 
-                      className="block px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                      className="block px-4 py-3 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap touch-manipulation"
                     >
                       Subscription
                     </a>
@@ -99,7 +99,7 @@ export function Navigation() {
                   <li>
                     <button 
                       onClick={handleSignOut} 
-                      className="w-full text-left px-4 py-2 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap"
+                      className="w-full text-left px-4 py-3 text-black hover:bg-black/10 rounded transition-colors text-sm whitespace-nowrap touch-manipulation"
                     >
                       Sign Out
                     </button>
@@ -110,16 +110,16 @@ export function Navigation() {
           </div>
         ) : (
           /* Sign In/Sign Up buttons for non-authenticated users */
-          <nav className="flex space-x-6">
+          <nav className="flex space-x-2 sm:space-x-6">
             <a
               href="/auth/login"
-              className="px-6 py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors"
+              className="px-3 py-2 sm:px-6 sm:py-2 rounded-lg font-semibold border-2 border-black text-black hover:bg-black hover:text-white transition-colors text-sm sm:text-base touch-manipulation"
             >
               Sign In
             </a>
             <a
               href="/auth/signup"
-              className="px-6 py-2 rounded-lg font-semibold bg-black text-white hover:bg-gray-800 transition-colors"
+              className="px-3 py-2 sm:px-6 sm:py-2 rounded-lg font-semibold bg-black text-white hover:bg-gray-800 transition-colors text-sm sm:text-base touch-manipulation"
             >
               Sign Up
             </a>

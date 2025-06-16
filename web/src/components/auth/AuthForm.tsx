@@ -100,12 +100,12 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
 
   if (showForgotPassword) {
     return (
-      <div className="bg-white border-2 border-black p-8 rounded-2xl shadow-xl text-black">
-        <h2 className="font-graffiti text-3xl text-black mb-6 text-center">
+      <div className="bg-white border-2 border-black p-6 sm:p-8 rounded-2xl shadow-xl text-black">
+        <h2 className="font-graffiti text-2xl sm:text-3xl text-black mb-4 sm:mb-6 text-center">
           FORGOT PASSWORD
         </h2>
         
-        <p className="text-center text-black/80 mb-6">
+        <p className="text-center text-black/80 mb-4 sm:mb-6 text-sm sm:text-base">
           Enter your email address and we'll send you a link to reset your password.
         </p>
         
@@ -116,15 +116,17 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
               placeholder="Email"
               value={resetEmail}
               onChange={(e) => setResetEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
+              className="w-full px-4 py-4 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
               required
+              autoComplete="email"
+              inputMode="email"
             />
           </div>
 
           <button
             type="submit"
             disabled={resetLoading}
-            className="w-full border-2 border-black text-black bg-white py-3 rounded-lg font-graffiti text-xl hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full border-2 border-black text-black bg-white py-4 rounded-lg font-graffiti text-lg sm:text-xl hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
             {resetLoading ? 'SENDING...' : 'SEND RESET EMAIL'}
           </button>
@@ -132,7 +134,7 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
           <button
             type="button"
             onClick={() => setShowForgotPassword(false)}
-            className="w-full text-black underline hover:text-black/70 transition-colors"
+            className="w-full text-black underline hover:text-black/70 transition-colors py-2 touch-manipulation"
           >
             Back to Sign In
           </button>
@@ -142,8 +144,8 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
   }
 
   return (
-    <div className="bg-white border-2 border-black p-8 rounded-2xl shadow-xl text-black">
-      <h2 className="font-graffiti text-3xl text-black mb-6 text-center">
+    <div className="bg-white border-2 border-black p-6 sm:p-8 rounded-2xl shadow-xl text-black">
+      <h2 className="font-graffiti text-2xl sm:text-3xl text-black mb-4 sm:mb-6 text-center">
         {mode === 'signin' ? 'SIGN IN' : 'SIGN UP'}
       </h2>
       
@@ -154,8 +156,10 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
+            className="w-full px-4 py-4 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
             required
+            autoComplete="email"
+            inputMode="email"
           />
         </div>
         
@@ -165,8 +169,9 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70"
+            className="w-full px-4 py-4 bg-white border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
             required
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
           />
         </div>
 
@@ -175,7 +180,7 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
             <button
               type="button"
               onClick={() => setShowForgotPassword(true)}
-              className="text-black underline hover:text-black/70 transition-colors text-sm"
+              className="text-black underline hover:text-black/70 transition-colors text-sm py-2 touch-manipulation"
             >
               Forgot Password?
             </button>
@@ -185,12 +190,12 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full border-2 border-black text-black bg-white py-3 rounded-lg font-graffiti text-xl hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full border-2 border-black text-black bg-white py-4 rounded-lg font-graffiti text-lg sm:text-xl hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
         >
           {loading ? 'LOADING...' : mode === 'signin' ? 'SIGN IN' : 'SIGN UP'}
         </button>
 
-        <div className="text-center text-black/90">
+        <div className="text-center text-black/90 text-sm sm:text-base">
           {mode === 'signin' ? (
             <p>
               Don't have an account?{' '}

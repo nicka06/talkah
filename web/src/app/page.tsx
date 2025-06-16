@@ -120,18 +120,18 @@ export default function HomePage() {
       <Navigation />
 
       {/* Hero Section */}
-      <main className="container mx-auto px-4 py-16">
+      <main className="container mx-auto px-4 py-8 sm:py-16">
         <div className="text-center max-w-4xl mx-auto">
-          <h1 className="font-graffiti text-6xl md:text-8xl font-bold text-black mb-6">
+          <h1 className="font-graffiti text-4xl sm:text-6xl md:text-8xl font-bold text-black mb-4 sm:mb-6 leading-tight">
             AI POWERED COMMUNICATION
           </h1>
-          <p className="text-xl text-black/90 mb-8 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-black/90 mb-6 sm:mb-8 max-w-2xl mx-auto px-2">
             Make AI-powered phone calls, send intelligent emails, and connect like never before with TALKAH.
           </p>
 
-          {/* Call to Action - Moved up */}
-          <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg max-w-md mx-auto border-2 border-black mb-12">
-            <h3 className="font-graffiti text-2xl text-black mb-6">START TALKING NOW</h3>
+          {/* Call to Action - Mobile Optimized */}
+          <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg max-w-md mx-auto border-2 border-black mb-8 sm:mb-12">
+            <h3 className="font-graffiti text-xl sm:text-2xl text-black mb-4 sm:mb-6">START TALKING NOW</h3>
             <div className="space-y-4">
               {/* Phone Number Input */}
               <div>
@@ -140,14 +140,16 @@ export default function HomePage() {
                   placeholder="(555) 123-4567"
                   value={phoneNumber}
                   onChange={handlePhoneChange}
-                  className={`w-full px-4 py-3 bg-white/5 border-2 rounded-lg focus:outline-none focus:ring-2 text-black placeholder-black/70 ${
+                  className={`w-full px-4 py-4 bg-white/5 border-2 rounded-lg focus:outline-none focus:ring-2 text-black placeholder-black/70 text-base ${
                     phoneError 
                       ? 'border-red-500 focus:ring-red-500' 
                       : 'border-black focus:ring-black'
                   }`}
+                  inputMode="tel"
+                  autoComplete="tel"
                 />
                 {phoneError && (
-                  <p className="text-red-600 text-sm mt-1 text-left">{phoneError}</p>
+                  <p className="text-red-600 text-sm mt-2 text-left">{phoneError}</p>
                 )}
               </div>
               
@@ -155,48 +157,49 @@ export default function HomePage() {
               <div>
                 <input
                   type="text"
-                  placeholder="Topic to discuss (e.g., business inquiry, appointment)"
+                  placeholder="What would you like to discuss?"
                   value={topic}
                   onChange={handleTopicChange}
-                  className={`w-full px-4 py-3 bg-white/5 border-2 rounded-lg focus:outline-none focus:ring-2 text-black placeholder-black/70 ${
+                  className={`w-full px-4 py-4 bg-white/5 border-2 rounded-lg focus:outline-none focus:ring-2 text-black placeholder-black/70 text-base ${
                     topicError 
                       ? 'border-red-500 focus:ring-red-500' 
                       : 'border-black focus:ring-black'
                   }`}
+                  autoComplete="off"
                 />
                 {topicError && (
-                  <p className="text-red-600 text-sm mt-1 text-left">{topicError}</p>
+                  <p className="text-red-600 text-sm mt-2 text-left">{topicError}</p>
                 )}
               </div>
               
               <button
                 onClick={handleCallNow}
-                className="w-full bg-black text-white py-3 rounded-lg font-graffiti text-xl hover:bg-gray-800 transition-colors"
+                className="w-full bg-black text-white py-4 rounded-lg font-graffiti text-lg sm:text-xl hover:bg-gray-800 transition-colors touch-manipulation"
               >
                 CALL NOW
               </button>
-              <p className="text-black/70 text-sm">
+              <p className="text-black/70 text-sm text-center">
                 Sign up required • Free trial available
               </p>
             </div>
           </div>
 
           {/* Feature Cards */}
-          <div className="grid md:grid-cols-3 gap-8 mb-12">
-            {/* Email Card - Left */}
-            <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black order-1 md:order-1">
-              <div className="text-4xl mb-4">📧</div>
-              <h3 className="font-bold text-xl mb-2 text-black">Emails</h3>
-              <p className="text-black/90">Smart email composition and responses</p>
-            </div>
-            {/* Phone Card - Center */}
-            <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black order-2 md:order-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-8 sm:mb-12">
+            {/* Phone Card - Priority on mobile */}
+            <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg border-2 border-black order-1 lg:order-2">
               <div className="text-4xl mb-4">📞</div>
               <h3 className="font-bold text-xl mb-2 text-black">Phone Calls</h3>
               <p className="text-black/90">AI-powered conversations with anyone, anywhere</p>
             </div>
-            {/* Messages Card - Right */}
-            <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black opacity-50 order-3 md:order-3">
+            {/* Email Card */}
+            <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg border-2 border-black order-2 lg:order-1">
+              <div className="text-4xl mb-4">📧</div>
+              <h3 className="font-bold text-xl mb-2 text-black">Emails</h3>
+              <p className="text-black/90">Smart email composition and responses</p>
+            </div>
+            {/* Messages Card */}
+            <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg border-2 border-black opacity-50 order-3 sm:col-span-2 lg:col-span-1">
               <div className="text-4xl mb-4">💬</div>
               <h3 className="font-bold text-xl mb-2 text-black">Texts</h3>
               <p className="text-black/90">Coming Soon</p>
@@ -204,13 +207,13 @@ export default function HomePage() {
           </div>
 
           {/* Mobile App Links */}
-          <div className="mt-12">
-            <p className="text-black/90 mb-4">Also available on mobile:</p>
-            <div className="flex justify-center space-x-4">
-              <button className="bg-black text-white px-6 py-3 rounded-lg font-graffiti hover:bg-gray-800 transition-colors">
+          <div className="mt-8 sm:mt-12">
+            <p className="text-black/90 mb-4 text-sm sm:text-base">Also available on mobile:</p>
+            <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4 max-w-sm sm:max-w-none mx-auto">
+              <button className="bg-black text-white px-6 py-3 rounded-lg font-graffiti text-sm sm:text-base hover:bg-gray-800 transition-colors touch-manipulation">
                 Download for iOS
               </button>
-              <button className="bg-black text-white px-6 py-3 rounded-lg font-graffiti hover:bg-gray-800 transition-colors">
+              <button className="bg-black text-white px-6 py-3 rounded-lg font-graffiti text-sm sm:text-base hover:bg-gray-800 transition-colors touch-manipulation">
                 Download for Android
               </button>
             </div>
@@ -219,13 +222,13 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="text-black py-8 mt-16 border-t-2 border-black">
-        <div className="container mx-auto px-2 text-center">
-          <div className="flex justify-center space-x-8 mb-4">
-            <a href="/privacy" className="hover:text-black/70 transition-colors font-semibold underline underline-offset-4">Privacy Policy</a>
-            <a href="/terms" className="hover:text-black/70 transition-colors font-semibold underline underline-offset-4">Terms of Service</a>
+      <footer className="text-black py-6 sm:py-8 mt-12 sm:mt-16 border-t-2 border-black">
+        <div className="container mx-auto px-4 text-center">
+          <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-8 mb-4">
+            <a href="/privacy" className="hover:text-black/70 transition-colors font-semibold underline underline-offset-4 text-sm sm:text-base">Privacy Policy</a>
+            <a href="/terms" className="hover:text-black/70 transition-colors font-semibold underline underline-offset-4 text-sm sm:text-base">Terms of Service</a>
           </div>
-          <p className="text-black/70">© 2025 TALKAH. All rights reserved.</p>
+          <p className="text-black/70 text-xs sm:text-sm">© 2025 TALKAH. All rights reserved.</p>
         </div>
       </footer>
     </div>
