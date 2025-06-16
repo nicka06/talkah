@@ -23,9 +23,11 @@ function VerifyContent() {
 
   useEffect(() => {
     const handleVerification = async () => {
-      const token_hash = searchParams.get('token_hash')
+      const token_hash = searchParams.get('token_hash') || searchParams.get('token')
       const type = searchParams.get('type')
       const next = searchParams.get('next') ?? '/dashboard'
+
+      console.log('Verification params:', { token_hash, type, next })
 
       if (!token_hash || !type) {
         setState('error')
@@ -34,26 +36,84 @@ function VerifyContent() {
       }
 
       try {
-        const { data, error } = await supabase.auth.verifyOtp({
-          token_hash,
-          type: type as any
-        })
-
-        if (error) throw error
-
+        // For email_change, use the correct verification method
         if (type === 'email_change') {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash,
+            type: 'email_change'
+          })
+
+          if (error) {
+            console.error('Email change verification error:', error)
+            throw error
+          }
+
+          // Email change was successful - now update the users table
+          if (data.user) {
+            try {
+              // Get the current user's pending_email from the database
+              const { data: userData, error: fetchError } = await supabase
+                .from('users')
+                .select('pending_email')
+                .eq('id', data.user.id)
+                .single()
+
+              if (fetchError) {
+                console.error('Error fetching user data:', fetchError)
+              } else if (userData?.pending_email) {
+                // Update the user's email in the database and clear pending_email
+                const { error: updateError } = await supabase
+                  .from('users')
+                  .update({ 
+                    email: userData.pending_email,
+                    pending_email: null,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', data.user.id)
+
+                if (updateError) {
+                  console.error('Error updating user email in database:', updateError)
+                } else {
+                  console.log('Successfully updated user email in database')
+                }
+              }
+            } catch (dbError) {
+              console.error('Database update error:', dbError)
+              // Don't fail the verification if DB update fails - email change was successful in auth
+            }
+          }
+
           setState('success')
           setMessage('Email successfully verified! Your email address has been updated.')
           
           // Show success toast and redirect after delay
           setTimeout(() => {
             showSuccess('Email Verified', 'Your email address has been successfully updated!')
-            router.push(next)
+            // Add query parameter to indicate successful email verification
+            const redirectUrl = next.includes('?') 
+              ? `${next}&verified=email` 
+              : `${next}?verified=email`
+            router.push(redirectUrl)
           }, 2000)
         } else if (type === 'recovery') {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash,
+            type: 'recovery'
+          })
+
+          if (error) throw error
+
           setState('password_reset')
           setMessage('Please enter your new password below.')
         } else {
+          // For other types (signup, invite, etc.)
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash,
+            type: type as any
+          })
+
+          if (error) throw error
+
           setState('success')
           setMessage('Verification successful!')
           
@@ -64,12 +124,20 @@ function VerifyContent() {
       } catch (error: any) {
         console.error('Verification error:', error)
         setState('error')
-        setMessage(error.message || 'Verification failed. Please try again.')
+        
+        // Provide more specific error messages
+        if (error.message?.includes('expired')) {
+          setMessage('This verification link has expired. Please request a new one.')
+        } else if (error.message?.includes('invalid')) {
+          setMessage('This verification link is invalid. Please check your email for the correct link.')
+        } else {
+          setMessage(error.message || 'Verification failed. Please try again or contact support.')
+        }
       }
     }
 
     handleVerification()
-  }, [searchParams, router, supabase, showSuccess])
+  }, [searchParams, supabase.auth, showSuccess, router])
 
   const handlePasswordReset = async () => {
     if (!passwordForm.password || passwordForm.password.length < 6) {

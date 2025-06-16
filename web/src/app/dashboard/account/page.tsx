@@ -25,6 +25,7 @@ export default function AccountPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [resendCountdown, setResendCountdown] = useState(0)
   const [isResending, setIsResending] = useState(false)
+  const [lastEmailChangeTime, setLastEmailChangeTime] = useState<number>(0)
   const supabase = createClient()
 
   // Fetch user profile including pending_email
@@ -53,6 +54,45 @@ export default function AccountPage() {
 
     fetchUserProfile()
   }, [user?.id, supabase])
+
+  // Listen for route changes to refresh data when returning from email verification
+  useEffect(() => {
+    const handleRouteChange = () => {
+      if (user?.id) {
+        // Refresh user profile when returning to this page
+        setTimeout(() => {
+          const fetchUpdatedProfile = async () => {
+            try {
+              const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single()
+
+              if (!error && data) {
+                setUserProfile(data)
+                setPendingEmail(data?.pending_email || null)
+                
+                // If pending_email was cleared, show success message
+                if (pendingEmail && !data.pending_email) {
+                  showSuccess('Email Updated', 'Your email address has been successfully updated!')
+                }
+              }
+            } catch (error) {
+              console.error('Error refreshing user profile:', error)
+            }
+          }
+          fetchUpdatedProfile()
+        }, 1000) // Small delay to ensure database has been updated
+      }
+    }
+
+    // Check if we're returning from email verification
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('verified') === 'email') {
+      handleRouteChange()
+    }
+  }, [user?.id, supabase, pendingEmail, showSuccess])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -122,42 +162,86 @@ export default function AccountPage() {
       return
     }
 
+    // Prevent duplicate requests with debouncing
+    const now = Date.now()
+    if (isProcessing || (now - lastEmailChangeTime < 30000)) {
+      showWarning('Please Wait', 'Please wait at least 30 seconds between email change requests.')
+      return
+    }
+
+    // Check if there's already a pending email change
+    if (pendingEmail) {
+      showWarning('Email Change Pending', `You already have a pending email change to ${pendingEmail}. Please verify that email first or cancel the current change.`)
+      return
+    }
+
     setIsProcessing(true)
+    setLastEmailChangeTime(now)
+    
     try {
-      // Only trigger the Supabase auth email change (this sends ONE verification email)
-      const { error: authError } = await supabase.auth.updateUser({
-        email: emailForm.newEmail
-      })
+      // Step 1: Store the pending email in the database FIRST
+      const { error: dbError } = await supabase
+        .from('users')
+        .update({ pending_email: emailForm.newEmail })
+        .eq('id', user!.id)
 
-      if (authError) throw authError
+      if (dbError) {
+        // If pending_email column doesn't exist, we need to add it
+        if (dbError.message.includes('column "pending_email" of relation "users" does not exist')) {
+          showError('Database Error', 'The email verification system needs to be set up. Please contact support.')
+          return
+        }
+        throw dbError
+      }
 
-      // Set local state for UI (don't update database to avoid triggering more emails)
+      // Step 2: Update local state immediately (UI shows pending state)
       setPendingEmail(emailForm.newEmail)
       setShowEmailDialog(false)
       setEmailForm({ newEmail: '' })
+
+      // Step 3: Trigger the Supabase auth email change (sends verification email)
+      const { data, error } = await supabase.auth.updateUser({
+        email: emailForm.newEmail
+      })
+
+      if (error) {
+        // Rollback the pending_email if auth update fails
+        await supabase
+          .from('users')
+          .update({ pending_email: null })
+          .eq('id', user!.id)
+        setPendingEmail(null)
+        throw error
+      }
       
       // Start the 60-second countdown
       setResendCountdown(60)
       
       showInfo(
         'Verification Email Sent', 
-        `Please check ${emailForm.newEmail} and click the verification link to complete the change.`,
-        { duration: 8000 }
+        `A verification email has been sent to your CURRENT email address (${user?.email}). Click the link in that email to confirm the change to ${emailForm.newEmail}.`,
+        { duration: 10000 }
       )
     } catch (error: any) {
       console.error('Error updating email:', error)
-      showError('Update Failed', `Failed to update email: ${error.message}`)
+      if (error.message?.includes('rate limit') || error.message?.includes('frequency')) {
+        showError('Rate Limited', 'You are sending requests too quickly. Please wait a moment before trying again.')
+      } else if (error.message?.includes('same email')) {
+        showWarning('Same Email', 'This email address is already associated with your account.')
+      } else {
+        showError('Update Failed', `Failed to update email: ${error.message}`)
+      }
     } finally {
       setIsProcessing(false)
     }
   }
 
   const handleResendEmail = async () => {
-    if (!pendingEmail || resendCountdown > 0) return
+    if (!pendingEmail || resendCountdown > 0 || isResending) return
 
     setIsResending(true)
     try {
-      // Resend the verification email
+      // Resend the verification email to the OLD email address
       const { error: authError } = await supabase.auth.updateUser({
         email: pendingEmail
       })
@@ -169,8 +253,8 @@ export default function AccountPage() {
       
       showInfo(
         'Verification Email Resent', 
-        `A new verification email has been sent to ${pendingEmail}`,
-        { duration: 5000 }
+        `A new verification email has been sent to your CURRENT email address (${user?.email}). Click the link to confirm the change to ${pendingEmail}.`,
+        { duration: 8000 }
       )
     } catch (error: any) {
       console.error('Error resending email:', error)
@@ -283,7 +367,7 @@ export default function AccountPage() {
                         <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span className="text-orange-800 text-sm">Pending verification to {pendingEmail}</span>
+                        <span className="text-orange-800 text-sm">Pending verification to change email to: {pendingEmail}</span>
                       </div>
                       <button
                         onClick={cancelEmailChange}
@@ -291,6 +375,12 @@ export default function AccountPage() {
                       >
                         Cancel
                       </button>
+                    </div>
+                    
+                    <div className="mb-2">
+                      <span className="text-orange-700 text-xs">
+                        <strong>Security:</strong> Verification email sent to your current address ({user?.email}) to prevent unauthorized changes.
+                      </span>
                     </div>
                     
                     {/* Resend Email Button */}
@@ -350,7 +440,7 @@ export default function AccountPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
             <h3 className="text-xl font-bold mb-4 text-center">Change Email</h3>
             <p className="text-gray-600 mb-4 text-center">
-              Enter your new email address. A verification email will be sent to confirm the change.
+              Enter your new email address. For security, a verification email will be sent to your <strong>current email address</strong> ({user?.email}) to confirm this change.
             </p>
             
             <div className="space-y-4">
