@@ -38,7 +38,7 @@ export function Navigation() {
           <a href="/" className="flex items-center space-x-2 sm:space-x-3 hover:opacity-80 transition-opacity">
             <img 
               src="/talkah_logo.png" 
-              alt="Talkah Logo" 
+              alt="TALKAH Logo - AI-Powered Communication Platform" 
               width={40} 
               height={40} 
               className="w-8 h-8 sm:w-12 sm:h-12 rounded-full object-cover"

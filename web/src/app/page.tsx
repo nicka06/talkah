@@ -123,15 +123,15 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-8 sm:py-16">
         <div className="text-center max-w-4xl mx-auto">
           <h1 className="font-graffiti text-4xl sm:text-6xl md:text-8xl font-bold text-black mb-4 sm:mb-6 leading-tight">
-            AI POWERED COMMUNICATION
+            Have a Chat with AI at Any Time!
           </h1>
-          <p className="text-lg sm:text-xl text-black/90 mb-6 sm:mb-8 max-w-2xl mx-auto px-2">
+          <h2 className="text-lg sm:text-xl text-black/90 mb-6 sm:mb-8 max-w-2xl mx-auto px-2">
             Make AI-powered phone calls, send intelligent emails, and connect like never before with TALKAH.
-          </p>
+          </h2>
 
           {/* Call to Action - Mobile Optimized */}
           <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg max-w-md mx-auto border-2 border-black mb-8 sm:mb-12">
-            <h3 className="font-graffiti text-xl sm:text-2xl text-black mb-4 sm:mb-6">START TALKING NOW</h3>
+            <h3 className="font-graffiti text-xl sm:text-2xl text-black mb-4 sm:mb-6">START TALKING TO AI NOW</h3>
             <div className="space-y-4">
               {/* Phone Number Input */}
               <div>

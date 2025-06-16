@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Allow all search engines to crawl the site
+Disallow: /admin/
+Disallow: /api/
+Disallow: /_next/
+Disallow: /dashboard/
+Disallow: /auth/verify
+
+# Sitemap location
+Sitemap: https://talkah.com/sitemap.xml 
