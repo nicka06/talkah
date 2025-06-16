@@ -37,7 +37,7 @@ export default function DashboardPage() {
           </p>
 
           {/* Communication Cards */}
-          <div className="grid md:grid-cols-3 gap-8 mb-12">
+          <div className="grid md:grid-cols-3 gap-8">
             {/* Phone Calls Card */}
             <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow">
               <div className="space-y-4">
@@ -108,31 +108,6 @@ export default function DashboardPage() {
                   Coming Soon
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="bg-white border-2 border-black rounded-xl p-6">
-            <h2 className="text-2xl font-bold text-black mb-4 font-graffiti">Quick Actions</h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              <button
-                onClick={() => router.push('/dashboard/activity')}
-                className="flex items-center justify-center space-x-2 p-4 border-2 border-black rounded-lg hover:bg-black hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="font-semibold">View History</span>
-              </button>
-              <button
-                onClick={() => router.push('/dashboard/subscription')}
-                className="flex items-center justify-center space-x-2 p-4 border-2 border-black rounded-lg hover:bg-black hover:text-white transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-                <span className="font-semibold">Manage Subscription</span>
-              </button>
             </div>
           </div>
         </div>

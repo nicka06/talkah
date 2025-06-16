@@ -58,11 +58,13 @@ export function useAuth() {
 
   // Sign in with OAuth (Google, Apple)
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
+    // For localhost development, don't use redirectTo - let Supabase handle it
+    // For production, also don't use redirectTo
+    console.log('OAuth attempt from:', window.location.origin)
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      // No options - let Supabase use its default callback
     })
     return { data, error }
   }
