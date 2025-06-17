@@ -2,11 +2,24 @@
 
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { Navigation } from '@/components/shared/Navigation'
 
 export default function DashboardPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
+
+  // Check for pending call data from homepage signup flow
+  useEffect(() => {
+    if (user && !loading) {
+      const pendingCallData = localStorage.getItem('talkah_pending_call')
+      
+      if (pendingCallData) {
+        // Redirect to calls page where the data will be processed
+        router.push('/dashboard/calls')
+      }
+    }
+  }, [user, loading, router])
 
   if (loading) {
     return (
@@ -38,8 +51,8 @@ export default function DashboardPage() {
 
           {/* Communication Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {/* Phone Calls Card */}
-            <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow order-1">
+            {/* Phone Calls Card - First position */}
+            <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow lg:col-start-1">
               <div className="space-y-4">
                 <div className="flex items-center justify-center">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 bg-black rounded-full flex items-center justify-center">
@@ -63,8 +76,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Emails Card */}
-            <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow order-2">
+            {/* Emails Card - Second position */}
+            <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow lg:col-start-2">
               <div className="space-y-4">
                 <div className="flex items-center justify-center">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 bg-black rounded-full flex items-center justify-center">
@@ -88,8 +101,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Text Messages Card - Coming Soon */}
-            <div className="bg-white border-2 border-black rounded-xl p-6 opacity-50 order-3 sm:col-span-2 lg:col-span-1">
+            {/* Text Messages Card - Coming Soon - Third position */}
+            <div className="bg-white border-2 border-black rounded-xl p-6 opacity-50 sm:col-span-2 lg:col-span-1 lg:col-start-3">
               <div className="space-y-4">
                 <div className="flex items-center justify-center">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gray-400 rounded-full flex items-center justify-center">

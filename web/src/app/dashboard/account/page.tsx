@@ -326,7 +326,7 @@ export default function AccountPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8 sm:py-16">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-2xl mx-auto">
           {/* Back Button */}
           <div className="flex justify-start mb-6 sm:mb-8">
             <BackButton text="Dashboard" href="/dashboard" />
@@ -336,134 +336,59 @@ export default function AccountPage() {
             ACCOUNT SETTINGS
           </h1>
 
-          {/* Account Settings Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-            {/* Personal Information Card */}
-            <div className="bg-white border-2 border-black rounded-xl p-6 sm:p-8">
-              <h2 className="font-graffiti text-xl sm:text-2xl font-bold text-black mb-4 sm:mb-6">
-                Personal Information
-              </h2>
-              
-              <div className="space-y-4 sm:space-y-6">
-                {/* Email Section */}
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <label className="block text-black font-semibold mb-1 text-sm sm:text-base">Email Address</label>
-                      <p className="text-black/70 text-sm sm:text-base break-all">{user?.email}</p>
-                    </div>
-                    <button
-                      onClick={() => setShowEmailDialog(true)}
-                      className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm sm:text-base whitespace-nowrap touch-manipulation"
-                    >
-                      Change Email
-                    </button>
-                  </div>
-                  
-                  {/* Pending Email Verification Banner */}
+          {/* Single Account Card */}
+          <div className="bg-white border-2 border-black rounded-xl p-6 sm:p-8">
+            <div className="space-y-6">
+              {/* Email Row */}
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <label className="block text-black font-semibold mb-1 text-sm sm:text-base">Email</label>
+                  <p className="text-black/70 text-sm sm:text-base break-all">{user?.email}</p>
                   {pendingEmail && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex-1">
-                          <p className="text-blue-800 font-semibold text-sm sm:text-base">Email Change Pending</p>
-                          <p className="text-blue-700 text-xs sm:text-sm">
-                            Verification email sent to <strong className="break-all">{pendingEmail}</strong>
-                          </p>
-                          <p className="text-blue-600 text-xs sm:text-sm mt-1">
-                            Please check your current email for verification instructions.
-                          </p>
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <button
-                            onClick={handleResendEmail}
-                            disabled={isResending || resendCountdown > 0}
-                            className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap touch-manipulation"
-                          >
-                            {isResending ? 'Sending...' : resendCountdown > 0 ? `Resend in ${resendCountdown}s` : 'Resend Email'}
-                          </button>
-                          <button
-                            onClick={cancelEmailChange}
-                            className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm whitespace-nowrap touch-manipulation"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    <p className="text-blue-600 text-xs mt-1">
+                      Pending: {pendingEmail}
+                    </p>
                   )}
                 </div>
-
-                {/* User ID Section */}
-                <div>
-                  <label className="block text-black font-semibold mb-1 text-sm sm:text-base">User ID</label>
-                  <p className="text-black/70 text-xs sm:text-sm font-mono break-all">{user?.id}</p>
-                </div>
-
-                {/* Account Created Section */}
-                <div>
-                  <label className="block text-black font-semibold mb-1 text-sm sm:text-base">Account Created</label>
-                  <p className="text-black/70 text-sm sm:text-base">
-                    {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}
-                  </p>
-                </div>
+                <button
+                  onClick={() => setShowEmailDialog(true)}
+                  className="w-10 h-10 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center ml-4"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
               </div>
-            </div>
 
-            {/* Security Settings Card */}
-            <div className="bg-white border-2 border-black rounded-xl p-6 sm:p-8">
-              <h2 className="font-graffiti text-xl sm:text-2xl font-bold text-black mb-4 sm:mb-6">
-                Security Settings
-              </h2>
-              
-              <div className="space-y-4 sm:space-y-6">
-                {/* Password Section */}
-                <div>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <label className="block text-black font-semibold mb-1 text-sm sm:text-base">Password</label>
-                      <p className="text-black/70 font-mono text-sm sm:text-base">{generatePasswordMask()}</p>
-                    </div>
-                    <button
-                      onClick={() => setShowPasswordDialog(true)}
-                      className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm sm:text-base whitespace-nowrap touch-manipulation"
-                    >
-                      Change Password
-                    </button>
-                  </div>
-                </div>
+              {/* Divider */}
+              <hr className="border-black/20" />
 
-                {/* Last Sign In */}
-                <div>
-                  <label className="block text-black font-semibold mb-1 text-sm sm:text-base">Last Sign In</label>
-                  <p className="text-black/70 text-sm sm:text-base">
-                    {user?.last_sign_in_at 
-                      ? new Date(user.last_sign_in_at).toLocaleString()
-                      : 'Never'
-                    }
-                  </p>
+              {/* Password Row */}
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <label className="block text-black font-semibold mb-1 text-sm sm:text-base">Password</label>
+                  <p className="text-black/70 font-mono text-sm sm:text-base">••••••••••</p>
                 </div>
-
-                {/* Sign In Method */}
-                <div>
-                  <label className="block text-black font-semibold mb-1 text-sm sm:text-base">Sign In Method</label>
-                  <p className="text-black/70 text-sm sm:text-base">
-                    {user?.app_metadata?.provider === 'google' ? 'Google OAuth' : 
-                     user?.app_metadata?.provider === 'apple' ? 'Apple OAuth' : 
-                     'Email & Password'}
-                  </p>
-                </div>
+                <button
+                  onClick={() => setShowPasswordDialog(true)}
+                  className="w-10 h-10 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center ml-4"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
         </div>
       </main>
 
-      {/* Email Change Dialog */}
+      {/* Simplified Email Change Dialog */}
       {showEmailDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white border-2 border-black rounded-xl p-6 sm:p-8 w-full max-w-md">
             <h3 className="font-graffiti text-xl sm:text-2xl font-bold text-black mb-4 sm:mb-6">
-              Change Email Address
+              Change Email
             </h3>
             
             <div className="space-y-4">
@@ -484,19 +409,13 @@ export default function AccountPage() {
                 />
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
-                <p className="text-yellow-800 text-xs sm:text-sm">
-                  <strong>Important:</strong> A verification email will be sent to your <strong>current</strong> email address for security. You must verify the change there before it takes effect.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 sm:space-x-3 sm:space-y-0">
+              <div className="flex gap-3">
                 <button
                   onClick={handleEmailChange}
                   disabled={isProcessing || !emailForm.newEmail}
-                  className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base touch-manipulation"
+                  className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
                 >
-                  {isProcessing ? 'Processing...' : 'Send Verification Email'}
+                  {isProcessing ? 'Sending...' : 'Send Verification'}
                 </button>
                 <button
                   onClick={() => {
@@ -504,7 +423,7 @@ export default function AccountPage() {
                     setEmailForm({ newEmail: '' })
                   }}
                   disabled={isProcessing}
-                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm sm:text-base touch-manipulation"
+                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition-colors text-sm sm:text-base"
                 >
                   Cancel
                 </button>
@@ -514,78 +433,70 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* Password Change Dialog */}
+      {/* Simplified Password Change Dialog */}
       {showPasswordDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white border-2 border-black rounded-xl p-6 sm:p-8 w-full max-w-md">
             <h3 className="font-graffiti text-xl sm:text-2xl font-bold text-black mb-4 sm:mb-6">
-              Change Password
+              Reset Password
             </h3>
             
             <div className="space-y-4">
-              <div>
-                <label htmlFor="currentPassword" className="block text-black font-semibold mb-2 text-sm sm:text-base">
-                  Current Password
-                </label>
-                <input
-                  id="currentPassword"
-                  type="password"
-                  placeholder="Enter current password"
-                  value={passwordForm.currentPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                  className="w-full px-4 py-4 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
-                  disabled={isProcessing}
-                  autoComplete="current-password"
-                />
-              </div>
+              <p className="text-black/70 text-sm">
+                We'll send a password reset link to your email address.
+              </p>
 
-              <div>
-                <label htmlFor="newPassword" className="block text-black font-semibold mb-2 text-sm sm:text-base">
-                  New Password
-                </label>
-                <input
-                  id="newPassword"
-                  type="password"
-                  placeholder="Enter new password"
-                  value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                  className="w-full px-4 py-4 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
-                  disabled={isProcessing}
-                  autoComplete="new-password"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="confirmPassword" className="block text-black font-semibold mb-2 text-sm sm:text-base">
-                  Confirm New Password
-                </label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm new password"
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                  className="w-full px-4 py-4 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-black text-black placeholder-black/70 text-base"
-                  disabled={isProcessing}
-                  autoComplete="new-password"
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 sm:space-x-3 sm:space-y-0">
+              <div className="flex gap-3">
                 <button
-                  onClick={handlePasswordChange}
-                  disabled={isProcessing}
-                  className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base touch-manipulation"
-                >
-                  {isProcessing ? 'Updating...' : 'Update Password'}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowPasswordDialog(false)
-                    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+                  onClick={async () => {
+                    setIsProcessing(true)
+                    try {
+                      console.log('🔄 Attempting password reset for:', user!.email!)
+                      
+                      const { data, error } = await supabase.auth.resetPasswordForEmail(
+                        user!.email!, 
+                        {
+                          redirectTo: `${window.location.origin}/auth/reset-password`
+                        }
+                      )
+                      
+                      console.log('📧 Password reset response:', { data, error })
+                      
+                      if (error) {
+                        console.error('❌ Password reset error:', error)
+                        throw error
+                      }
+                      
+                      console.log('✅ Password reset email sent successfully')
+                      showSuccess('Reset Email Sent', 'Check your email for password reset instructions')
+                      setShowPasswordDialog(false)
+                    } catch (error: any) {
+                      console.error('💥 Password reset failed:', error)
+                      
+                      // Show specific error messages
+                      let errorMessage = 'Failed to send reset email'
+                      if (error.message?.includes('rate limit') || error.message?.includes('frequency')) {
+                        errorMessage = 'Too many requests. Please wait before trying again.'
+                      } else if (error.message?.includes('not found')) {
+                        errorMessage = 'Email address not found.'
+                      } else if (error.message) {
+                        errorMessage = error.message
+                      }
+                      
+                      showError('Reset Failed', errorMessage)
+                    } finally {
+                      setIsProcessing(false)
+                    }
                   }}
                   disabled={isProcessing}
-                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm sm:text-base touch-manipulation"
+                  className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                >
+                  {isProcessing ? 'Sending...' : 'Send Reset Email'}
+                </button>
+                <button
+                  onClick={() => setShowPasswordDialog(false)}
+                  disabled={isProcessing}
+                  className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition-colors text-sm sm:text-base"
                 >
                   Cancel
                 </button>

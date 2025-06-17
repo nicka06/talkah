@@ -229,21 +229,6 @@ export default function CallsPage() {
                 />
               </div>
 
-              {/* Usage Stats - Mobile Optimized */}
-              {usage && (
-                <div className="bg-white/20 border border-black/20 rounded-lg p-4">
-                  <div className="text-center">
-                    <p className="text-black/90 font-semibold text-sm sm:text-base">
-                      {usage.phoneCallsLimit === -1 
-                        ? '∞ calls remaining' 
-                        : `${usage.phoneCallsLimit - usage.phoneCallsUsed} of ${usage.phoneCallsLimit} calls remaining`
-                      }
-                    </p>
-                    <p className="text-black/70 text-xs sm:text-sm mt-1">Current Plan: {currentPlanId.charAt(0).toUpperCase() + currentPlanId.slice(1)}</p>
-                  </div>
-                </div>
-              )}
-
               {/* Call Button */}
               <button
                 onClick={handleInitiateCall}
