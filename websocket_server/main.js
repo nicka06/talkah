@@ -54,6 +54,94 @@ if (ELEVENLABS_API_KEY) {
 // Store active connection details, including conversation history
 const activeConnections = new Map();
 
+// Call duration limits (in milliseconds)
+const CALL_DURATION_LIMITS = {
+  SOFT_WARNING: 2.5 * 60 * 1000,    // 2:30 - start wrapping up
+  URGENT_WARNING: 2.83 * 60 * 1000, // 2:50 - finish immediately  
+  HARD_CUTOFF: 3 * 60 * 1000        // 3:00 - end call
+};
+
+function setupCallTimer(connectionId) {
+  const connectionData = activeConnections.get(connectionId);
+  if (!connectionData) return;
+
+  const startTime = Date.now();
+  connectionData.callStartTime = startTime;
+
+  // 2:30 - Soft warning to start concluding
+  connectionData.softWarningTimeout = setTimeout(() => {
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) 2:30 reached - adding soft wrap-up prompt`);
+    connectionData.shouldWrapUp = true;
+  }, CALL_DURATION_LIMITS.SOFT_WARNING);
+
+  // 2:50 - Urgent warning to finish immediately
+  connectionData.urgentWarningTimeout = setTimeout(() => {
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) 2:50 reached - adding urgent finish prompt`);
+    connectionData.shouldFinishNow = true;
+  }, CALL_DURATION_LIMITS.URGENT_WARNING);
+
+  // 3:00 - Hard cutoff
+  connectionData.hardCutoffTimeout = setTimeout(() => {
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) 3:00 reached - ending call`);
+    endCallHard(connectionId);
+  }, CALL_DURATION_LIMITS.HARD_CUTOFF);
+
+  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Call timer started - 3 minute limit active`);
+}
+
+function sendWarningMessage(connectionId, warningText) {
+  const connectionData = activeConnections.get(connectionId);
+  if (!connectionData) return;
+
+  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Sending warning: ${warningText}`);
+  
+  // Add system message to conversation history
+  connectionData.conversationHistory.push({ 
+    role: "system", 
+    content: `URGENT: ${warningText}` 
+  });
+
+  // Generate AI response to the warning
+  handleLLM(connectionId, `[SYSTEM WARNING: ${warningText}]`);
+}
+
+function forceEndCall(connectionId) {
+  const connectionData = activeConnections.get(connectionId);
+  if (!connectionData) return;
+
+  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Force ending call - 3 minute limit reached`);
+  
+  // Send a final goodbye message
+  handleTTS(connectionId, "Time's up! Thanks for calling. Goodbye!").then(() => {
+    // Close the WebSocket connection after the goodbye message
+    setTimeout(() => {
+      if (connectionData.socket && connectionData.socket.readyState === WebSocket.OPEN) {
+        connectionData.socket.close(1000, "Call duration limit reached");
+      }
+    }, 2000); // Give 2 seconds for the goodbye message to play
+  });
+}
+
+function clearCallTimers(connectionId) {
+  const connectionData = activeConnections.get(connectionId);
+  if (!connectionData) return;
+
+  if (connectionData.timer1) {
+    clearTimeout(connectionData.timer1);
+    connectionData.timer1 = null;
+  }
+  if (connectionData.timer2) {
+    clearTimeout(connectionData.timer2);
+    connectionData.timer2 = null;
+  }
+  if (connectionData.timer3) {
+    clearTimeout(connectionData.timer3);
+    connectionData.timer3 = null;
+  }
+  
+  console.log(`(ID: ${connectionId}) Call timers cleared`);
+}
+
 // --- Core Logic ---
 
 async function handleLLM(connectionId, transcript) {
@@ -65,12 +153,34 @@ async function handleLLM(connectionId, transcript) {
 
   // Add user's message to history
   connectionData.conversationHistory.push({ role: "user", content: transcript });
+
+  // Check if we need to inject time-based prompts
+  let modifiedMessages = [...connectionData.conversationHistory];
+  
+  if (connectionData.shouldFinishNow) {
+    // 2:50 - Urgent finish prompt
+    modifiedMessages.push({
+      role: "system", 
+      content: "URGENT: You have only 10 seconds left in this call. End the conversation immediately with a brief, polite goodbye. Do not start new topics or ask questions."
+    });
+    connectionData.shouldFinishNow = false; // Only inject once
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Injected urgent finish prompt`);
+  } else if (connectionData.shouldWrapUp) {
+    // 2:30 - Soft wrap-up prompt
+    modifiedMessages.push({
+      role: "system", 
+      content: "The call is approaching its time limit. Begin wrapping up the conversation naturally. Start concluding your current topic and prepare for a polite goodbye within the next 30 seconds."
+    });
+    connectionData.shouldWrapUp = false; // Only inject once
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Injected soft wrap-up prompt`);
+  }
+
   console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Sending to OpenAI:`, transcript);
 
   try {
     const stream = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: connectionData.conversationHistory,
+      messages: modifiedMessages,
       stream: true,
     });
 
@@ -124,7 +234,7 @@ async function handleTTS(connectionId, textToSpeak) {
 
   console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Streaming to ElevenLabs: "${textToSpeak}"`);
 
-  const voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel's Voice ID
+  const voiceId = "EXAVITQu4vr4xnSDxMaL"; // Sarah's Voice ID
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=ulaw_8000`;
   
   // Return a promise that resolves when the stream is finished
@@ -132,7 +242,6 @@ async function handleTTS(connectionId, textToSpeak) {
     try {
       const response = await axios.post(url, {
           text: textToSpeak,
-          model_id: "eleven_turbo_v2",
       }, {
           headers: {
               'xi-api-key': ELEVENLABS_API_KEY,
@@ -215,6 +324,9 @@ wss.on('connection', (ws, req) => {
           
           connectionData.twilioStreamSid = streamSid;
           connectionData.callSid = callSid;
+
+          // Setup 3-minute call timer
+          setupCallTimer(connectionId);
 
           // Setup conversation
           const decodedTopic = decodeURIComponent(topic);
@@ -317,6 +429,8 @@ wss.on('connection', (ws, req) => {
         recognizeStream.destroy();
         recognizeStream = null;
       }
+      // Clear all call timers
+      clearCallTimers(connectionId);
       activeConnections.delete(connectionId);
   }
 
