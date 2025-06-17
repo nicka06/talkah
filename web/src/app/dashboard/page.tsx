@@ -51,33 +51,8 @@ export default function DashboardPage() {
 
           {/* Communication Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            {/* Phone Calls Card - First position */}
+            {/* Emails Card - First position */}
             <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow lg:col-start-1">
-              <div className="space-y-4">
-                <div className="flex items-center justify-center">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-black rounded-full flex items-center justify-center">
-                    <svg className="w-7 h-7 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-black mb-2">Phone Calls</h3>
-                  <p className="text-black/70 text-sm mb-4">
-                    Have AI-powered conversations where you talk to AI about any topic
-                  </p>
-                </div>
-                <button
-                  onClick={() => router.push('/dashboard/calls')}
-                  className="w-full bg-black text-white py-3 sm:py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors touch-manipulation text-sm sm:text-base"
-                >
-                  Start Call
-                </button>
-              </div>
-            </div>
-
-            {/* Emails Card - Second position */}
-            <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow lg:col-start-2">
               <div className="space-y-4">
                 <div className="flex items-center justify-center">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 bg-black rounded-full flex items-center justify-center">
@@ -97,6 +72,31 @@ export default function DashboardPage() {
                   className="w-full bg-black text-white py-3 sm:py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors touch-manipulation text-sm sm:text-base"
                 >
                   Send Email
+                </button>
+              </div>
+            </div>
+
+            {/* Phone Calls Card - Center position */}
+            <div className="bg-white border-2 border-black rounded-xl p-6 hover:shadow-lg transition-shadow lg:col-start-2">
+              <div className="space-y-4">
+                <div className="flex items-center justify-center">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-black rounded-full flex items-center justify-center">
+                    <svg className="w-7 h-7 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-bold text-black mb-2">Phone Calls</h3>
+                  <p className="text-black/70 text-sm mb-4">
+                    Have AI-powered conversations where you talk to AI about any topic
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push('/dashboard/calls')}
+                  className="w-full bg-black text-white py-3 sm:py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors touch-manipulation text-sm sm:text-base"
+                >
+                  Start Call
                 </button>
               </div>
             </div>

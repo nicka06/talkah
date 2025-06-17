@@ -110,15 +110,19 @@ serve(async (req: Request) => {
           messages: [
             {
               role: 'system',
-              content: 'You are a helpful assistant that writes professional, well-structured emails. Write clear, concise, and appropriate emails based on the topic provided.'
+              content: 'You are an AI assistant that writes and sends real emails on behalf of users. Write natural, conversational emails that respond to the topic in a friendly, casual way. Don\'t overthink it - just write like you\'re having a normal conversation via email. No need to be overly formal or professional unless the topic specifically calls for it.'
             },
             {
               role: 'user',
-              content: `Write an email about: ${topic}. The subject is: ${subject}. Make it professional and appropriate.`
+              content: `Write a complete email that will be sent to ${recipient_email} with the subject "${subject}". The email should be about: ${topic}. 
+
+Write this as a real email that will be sent immediately. Just respond naturally to the topic 
+
+The email will be sent from ${fromEmail}.`
             }
           ],
-          max_tokens: 800,
-          temperature: 0.7
+          max_tokens: 500,
+          temperature: 0.8
         })
       });
 
@@ -155,10 +159,16 @@ serve(async (req: Request) => {
           subject: subject
         }],
         from: { email: fromEmail },
-        content: [{
-          type: 'text/plain',
-          value: emailContent
-        }]
+        content: [
+          {
+            type: 'text/plain',
+            value: emailContent
+          },
+          {
+            type: 'text/html',
+            value: emailContent.replace(/\n/g, '<br>').replace(/\n\n/g, '<br><br>')
+          }
+        ]
       })
     });
 
