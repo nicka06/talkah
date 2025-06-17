@@ -122,6 +122,24 @@ function forceEndCall(connectionId) {
   });
 }
 
+function stopAllTTS(connectionId) {
+  const connectionData = activeConnections.get(connectionId);
+  if (!connectionData || !connectionData.activeTTS) return;
+
+  const activeCount = connectionData.activeTTS.size;
+  if (activeCount > 0) {
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Stopping ${activeCount} active TTS streams due to user speech`);
+    
+    // Clear all active TTS streams
+    connectionData.activeTTS.clear();
+    
+    // Call interruption handler if available
+    if (connectionData.interruptTTS) {
+      connectionData.interruptTTS();
+    }
+  }
+}
+
 function clearCallTimers(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
@@ -252,8 +270,34 @@ async function handleTTS(connectionId, textToSpeak) {
           timeout: 10000 // 10 second timeout
       });
 
+      // Track this TTS stream for barge-in functionality
+      const ttsId = crypto.randomUUID();
+      if (!connectionData.activeTTS) {
+        connectionData.activeTTS = new Set();
+      }
+      connectionData.activeTTS.add(ttsId);
+      
+      let isInterrupted = false;
+
+      const cleanup = () => {
+        if (connectionData.activeTTS) {
+          connectionData.activeTTS.delete(ttsId);
+        }
+        if (response.data && !response.data.destroyed) {
+          response.data.destroy();
+        }
+      };
+
       response.data.on('data', (chunk) => {
         try {
+          // Check if this TTS has been interrupted
+          if (isInterrupted || !connectionData.activeTTS?.has(ttsId)) {
+            console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) TTS interrupted, stopping audio stream for: "${textToSpeak}"`);
+            cleanup();
+            resolve();
+            return;
+          }
+
           if (connectionData.socket.readyState === WebSocket.OPEN && connectionData.twilioStreamSid) {
             const audioBase64 = chunk.toString('base64');
             const mediaMessage = JSON.stringify({
@@ -267,18 +311,29 @@ async function handleTTS(connectionId, textToSpeak) {
           }
         } catch (error) {
           console.error(`(ID: ${connectionId}) Error sending audio data:`, error.message);
+          cleanup();
+          resolve();
         }
       });
 
       response.data.on('end', () => {
         console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Finished streaming TTS for: "${textToSpeak}"`);
+        cleanup();
         resolve();
       });
 
       response.data.on('error', (err) => {
         console.error(`(ID: ${connectionId}) ElevenLabs stream error:`, err.message);
+        cleanup();
         resolve(); // Resolve instead of reject to prevent crashes
       });
+
+      // Set up interruption handler
+      connectionData.interruptTTS = () => {
+        isInterrupted = true;
+        cleanup();
+        resolve();
+      };
 
     } catch (error) {
       console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) ElevenLabs error:`, error.response ? error.response.status : error.message);
@@ -381,10 +436,19 @@ wss.on('connection', (ws, req) => {
               .on('data', (data) => {
                   try {
                     const result = data.results[0];
-                    if (result && result.alternatives[0] && result.isFinal) {
+                    if (result && result.alternatives[0]) {
                       const transcript = result.alternatives[0].transcript.trim();
-                      if (transcript) {
-                         handleLLM(connectionId, transcript);
+                      
+                      // Barge-in: Stop TTS immediately when user starts speaking
+                      // We do this on interim results to be more responsive
+                      if (transcript && transcript.length > 2) { // Minimum 3 characters to avoid false triggers
+                        stopAllTTS(connectionId);
+                      }
+                      
+                      // Only process final results for LLM
+                      if (result.isFinal && transcript) {
+                        console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Final transcript: "${transcript}"`);
+                        handleLLM(connectionId, transcript);
                       }
                     }
                   } catch (error) {
@@ -431,6 +495,8 @@ wss.on('connection', (ws, req) => {
       }
       // Clear all call timers
       clearCallTimers(connectionId);
+      // Stop any active TTS streams
+      stopAllTTS(connectionId);
       activeConnections.delete(connectionId);
   }
 
