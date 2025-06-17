@@ -89,7 +89,9 @@ async function handleLLM(connectionId, transcript) {
           if (sentence) {
             // Don't await. This lets TTS start for the first sentence 
             // while the LLM works on the next one.
-            handleTTS(connectionId, sentence); 
+            handleTTS(connectionId, sentence).catch(error => {
+              console.error(`(ID: ${connectionId}) TTS error for sentence:`, error.message);
+            }); 
           }
           sentenceBuffer = sentenceBuffer.substring(sentenceEndIndex + 1);
         }
@@ -98,7 +100,9 @@ async function handleLLM(connectionId, transcript) {
 
     // Send any remaining text in the buffer
     if (sentenceBuffer.trim()) {
-      handleTTS(connectionId, sentenceBuffer.trim());
+      handleTTS(connectionId, sentenceBuffer.trim()).catch(error => {
+        console.error(`(ID: ${connectionId}) TTS error for remaining buffer:`, error.message);
+      });
     }
 
     if (fullResponse) {
@@ -135,20 +139,25 @@ async function handleTTS(connectionId, textToSpeak) {
               'Content-Type': 'application/json',
               'Accept': 'audio/mulaw'
           },
-          responseType: 'stream' // Set response type to stream
+          responseType: 'stream',
+          timeout: 10000 // 10 second timeout
       });
 
       response.data.on('data', (chunk) => {
-        if (connectionData.socket.readyState === WebSocket.OPEN && connectionData.twilioStreamSid) {
-          const audioBase64 = chunk.toString('base64');
-          const mediaMessage = JSON.stringify({
-            event: "media",
-            streamSid: connectionData.twilioStreamSid,
-            media: {
-              payload: audioBase64,
-            },
-          });
-          connectionData.socket.send(mediaMessage);
+        try {
+          if (connectionData.socket.readyState === WebSocket.OPEN && connectionData.twilioStreamSid) {
+            const audioBase64 = chunk.toString('base64');
+            const mediaMessage = JSON.stringify({
+              event: "media",
+              streamSid: connectionData.twilioStreamSid,
+              media: {
+                payload: audioBase64,
+              },
+            });
+            connectionData.socket.send(mediaMessage);
+          }
+        } catch (error) {
+          console.error(`(ID: ${connectionId}) Error sending audio data:`, error.message);
         }
       });
 
@@ -158,13 +167,13 @@ async function handleTTS(connectionId, textToSpeak) {
       });
 
       response.data.on('error', (err) => {
-        console.error(`(ID: ${connectionId}) ElevenLabs stream error:`, err);
-        reject(err);
+        console.error(`(ID: ${connectionId}) ElevenLabs stream error:`, err.message);
+        resolve(); // Resolve instead of reject to prevent crashes
       });
 
     } catch (error) {
-      console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) ElevenLabs error:`, error.response ? error.response.data : error.message);
-      reject(error);
+      console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) ElevenLabs error:`, error.response ? error.response.status : error.message);
+      resolve(); // Resolve instead of reject to prevent crashes
     }
   });
 }
@@ -209,43 +218,77 @@ wss.on('connection', (ws, req) => {
 
           // Setup conversation
           const decodedTopic = decodeURIComponent(topic);
-          const systemPrompt = `You are a conversational AI. The topic is "${decodedTopic}". Guide the user through a 10-minute conversation on this topic. Be engaging and ask open-ended questions. At 9 minutes 50 seconds, provide a wrap-up prompt.`;
+          const systemPrompt = `You are a conversational AI that embodies and acts on the given topic directly. Topic: "${decodedTopic}". Instead of asking questions about the topic, immediately start acting, speaking, or behaving according to what the topic describes. If it's a character or persona, become that character. If it's a style of speaking, use that style. If it's an activity or subject, dive right into it. Be natural and conversational while fully embodying the topic throughout the conversation.`;
           connectionData.conversationHistory.push({ role: "system", content: systemPrompt });
 
-          const initialGreeting = `Hello! Let's talk about ${decodedTopic}. What are your initial thoughts on it?`;
+          // Generate an appropriate initial response based on the topic
+          let initialGreeting;
+          const topicLower = decodedTopic.toLowerCase();
+          
+          if (topicLower.includes('pirate')) {
+            initialGreeting = "Ahoy there, matey! Welcome aboard me ship!";
+          } else if (topicLower.includes('shakespeare') || topicLower.includes('elizabethan')) {
+            initialGreeting = "Hark! Good morrow to thee, fair friend!";
+          } else if (topicLower.includes('robot') || topicLower.includes('ai')) {
+            initialGreeting = "GREETINGS, HUMAN. INITIATING CONVERSATION PROTOCOL.";
+          } else if (topicLower.includes('southern') || topicLower.includes('cowboy')) {
+            initialGreeting = "Well howdy there, partner! Nice to make your acquaintance!";
+          } else if (topicLower.includes('meditation') || topicLower.includes('zen')) {
+            initialGreeting = "Take a deep breath... Let's find peace together in this moment.";
+          } else if (topicLower.includes('coach') || topicLower.includes('motivational')) {
+            initialGreeting = "Hey there, champion! Ready to unlock your potential? Let's go!";
+          } else {
+            // Default: try to embody the topic directly
+            initialGreeting = `Hello! I'm ready to dive into ${decodedTopic} with you right now!`;
+          }
+          
           connectionData.conversationHistory.push({ role: "assistant", content: initialGreeting });
           
           // SPEED OPTIMIZATION: Start STT immediately, don't wait for TTS
           if (speechClient) {
             console.log(`(ID: ${connectionId}) Initializing STT stream.`);
-            recognizeStream = speechClient.streamingRecognize({
-              config: {
-                encoding: 'MULAW',
-                sampleRateHertz: 8000,
-                languageCode: languageCode,
-                profanityFilter: false,
-                enableAutomaticPunctuation: true,
-              },
-              interimResults: true,
-            })
-            .on('error', (err) => {
-                console.error(`(ID: ${connectionId}) STT Error:`, err);
-                if (ws.readyState === ws.OPEN) ws.close(1011, "STT Error");
-            })
-            .on('data', (data) => {
-                const result = data.results[0];
-                if (result && result.alternatives[0] && result.isFinal) {
-                  const transcript = result.alternatives[0].transcript.trim();
-                  if (transcript) {
-                     handleLLM(connectionId, transcript);
+            try {
+              recognizeStream = speechClient.streamingRecognize({
+                config: {
+                  encoding: 'MULAW',
+                  sampleRateHertz: 8000,
+                  languageCode: languageCode,
+                  profanityFilter: false,
+                  enableAutomaticPunctuation: true,
+                },
+                interimResults: true,
+              })
+              .on('error', (err) => {
+                  console.error(`(ID: ${connectionId}) STT Error:`, err.message);
+                  // Don't close WebSocket on STT error, just log it
+                  if (recognizeStream) {
+                    recognizeStream.destroy();
+                    recognizeStream = null;
                   }
-                }
-            });
-            console.log(`(ID: ${connectionId}) STT stream ready.`);
+              })
+              .on('data', (data) => {
+                  try {
+                    const result = data.results[0];
+                    if (result && result.alternatives[0] && result.isFinal) {
+                      const transcript = result.alternatives[0].transcript.trim();
+                      if (transcript) {
+                         handleLLM(connectionId, transcript);
+                      }
+                    }
+                  } catch (error) {
+                    console.error(`(ID: ${connectionId}) STT data processing error:`, error.message);
+                  }
+              });
+              console.log(`(ID: ${connectionId}) STT stream ready.`);
+            } catch (error) {
+              console.error(`(ID: ${connectionId}) Failed to initialize STT:`, error.message);
+            }
           }
           
           // Start initial greeting TTS (non-blocking)
-          handleTTS(connectionId, initialGreeting);
+          handleTTS(connectionId, initialGreeting).catch(error => {
+            console.error(`(ID: ${connectionId}) Initial TTS error:`, error.message);
+          });
           break;
 
         case 'media':
