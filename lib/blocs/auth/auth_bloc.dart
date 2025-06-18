@@ -41,6 +41,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthUpdatePasswordRequested>(_onAuthUpdatePasswordRequested);
     on<AuthGoogleSignInRequested>(_onAuthGoogleSignInRequested);
     on<AuthAppleSignInRequested>(_onAuthAppleSignInRequested);
+    on<AuthPasswordResetRequested>(_onAuthPasswordResetRequested);
   }
 
   Stream<AuthState> _authStateChangeStream() {
@@ -51,6 +52,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
       
       final session = data.session;
+      
+      if (data.event == supabase.AuthChangeEvent.passwordRecovery) {
+        return AuthPasswordRecovery(session?.accessToken);
+      }
+      
       if (session != null) {
         return AuthAuthenticated(
           user: UserModel(
@@ -309,20 +315,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthUpdatePasswordRequested event,
     Emitter<AuthState> emit,
   ) async {
-    final currentState = state;
-    if (currentState is! AuthAuthenticated) return;
-    
-    emit(AuthUpdating(user: currentState.user));
+    // No longer require user to be authenticated, as this is used for password recovery
+    emit(AuthLoading());
     
     try {
-      final success = await ApiService.updateUserPassword(newPassword: event.newPassword);
+      await SupabaseConfig.auth.updateUser(
+        supabase.UserAttributes(password: event.newPassword),
+      );
       
-      if (success) {
-        // Password update successful, return to authenticated state
-        emit(AuthAuthenticated(user: currentState.user));
+      // After a successful password update, the user is considered logged in.
+      // We should fetch their full profile.
+      final user = SupabaseConfig.auth.currentUser;
+      if (user != null) {
+        final userResponse = await SupabaseConfig.client
+            .from('users')
+            .select()
+            .eq('id', user.id)
+            .single();
+        final userModel = UserModel.fromJson(userResponse);
+        emit(AuthAuthenticated(user: userModel));
       } else {
-        final error = AppError.authentication(details: 'Failed to update password');
-        emit(AuthError(error: error));
+        // This case should ideally not be reached after a successful update
+        emit(AuthUnauthenticated());
       }
     } catch (e) {
       final error = _errorHandler.handleException(e, 'Updating user password');
@@ -500,6 +514,37 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
       
       final error = _errorHandler.handleException(e, 'Apple sign-in');
+      emit(AuthError(error: error));
+    }
+  }
+
+  Future<void> _onAuthPasswordResetRequested(
+    AuthPasswordResetRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+    try {
+      await SupabaseConfig.auth.resetPasswordForEmail(
+        event.email,
+        // TODO: Configure the redirect URL in Supabase dashboard
+        // redirectTo: 'io.supabase.flutterquickstart://login-callback/',
+      );
+      emit(AuthPasswordResetEmailSent());
+      // Revert to a stable state after, so UI can react again if needed
+      final session = SupabaseConfig.auth.currentSession;
+      if (session != null) {
+        final userResponse = await SupabaseConfig.client
+            .from('users')
+            .select()
+            .eq('id', session.user.id)
+            .single();
+        final user = UserModel.fromJson(userResponse);
+        emit(AuthAuthenticated(user: user));
+      } else {
+        emit(AuthUnauthenticated());
+      }
+    } catch (e) {
+      final error = _errorHandler.handleException(e, 'Sending password reset email');
       emit(AuthError(error: error));
     }
   }

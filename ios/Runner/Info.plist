@@ -59,6 +59,14 @@
 					<string>com.googleusercontent.apps.380061321945-gueu2eqhgigbv1mt9fssgobo9n2hgm8g</string>
 				</array>
 			</dict>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>io.supabase.flutterquickstart</string>
+				</array>
+			</dict>
 		</array>
 		
 		<!-- Apple Sign-In Capability -->

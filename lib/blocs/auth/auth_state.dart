@@ -40,4 +40,14 @@ class AuthUpdating extends AuthState {
 
   @override
   List<Object> get props => [user];
+}
+
+class AuthPasswordResetEmailSent extends AuthState {}
+
+class AuthPasswordRecovery extends AuthState {
+  final String? accessToken;
+  const AuthPasswordRecovery(this.accessToken);
+
+  @override
+  List<Object?> get props => [accessToken];
 } 

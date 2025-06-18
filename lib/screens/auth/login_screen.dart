@@ -6,6 +6,7 @@ import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../models/app_error.dart';
 import '../../widgets/error_display_widget.dart';
+import 'forgot_password_screen.dart'; // Import the new screen
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -285,6 +286,26 @@ class _LoginScreenState extends State<LoginScreen> {
               },
             ),
             
+            // Forgot Password Button
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                  );
+                },
+                child: Text(
+                  'Forgot Password?',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: (screenWidth * 0.035).clamp(12.0, 15.0),
+                  ),
+                ),
+              ),
+            ),
+            
             SizedBox(height: screenHeight * 0.03), // 3% of height
             
             // Sign Up Button
@@ -476,29 +497,27 @@ class _LoginScreenState extends State<LoginScreen> {
               },
             ),
             
-            SizedBox(height: screenHeight * 0.03), // 3% of height
-            
-            // Forgot Password Link (only for login)
-            GestureDetector(
-              onTap: () {
-                // TODO: Implement forgot password
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Forgot Password - Coming Soon!')),
-                );
-              },
-              child: Padding(
-                padding: EdgeInsets.only(bottom: screenHeight * 0.02),
+            // Forgot Password Button
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                  );
+                },
                 child: Text(
-                  'FORGOT PASSWORD?',
+                  'Forgot Password?',
                   style: TextStyle(
-                    fontSize: (screenWidth * 0.03).clamp(10.0, 14.0),
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                    letterSpacing: screenWidth * 0.001,
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: (screenWidth * 0.035).clamp(12.0, 15.0),
                   ),
                 ),
               ),
             ),
+            
+            SizedBox(height: screenHeight * 0.03), // 3% of height
             
             // Login Button
             BlocBuilder<AuthBloc, AuthState>(

@@ -61,8 +61,11 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
 
     setResetLoading(true)
     try {
+      // Construct the redirect URL dynamically
+      const redirectURL = `${window.location.origin}/auth/reset-password`;
+      
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: 'http://localhost:3000/auth/verify'
+        redirectTo: redirectURL
       })
 
       if (error) throw error

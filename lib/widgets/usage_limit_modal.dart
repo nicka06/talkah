@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../screens/subscription/subscription_screen.dart';
+import 'dart:io' show Platform;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/subscription_service.dart';
+import '../services/stripe_payment_service.dart';
 
 class UsageLimitModal {
   static void show({
@@ -19,7 +23,7 @@ class UsageLimitModal {
   }
 }
 
-class _UsageLimitDialog extends StatelessWidget {
+class _UsageLimitDialog extends StatefulWidget {
   final String actionType;
   final String message;
 
@@ -29,8 +33,188 @@ class _UsageLimitDialog extends StatelessWidget {
   });
 
   @override
+  State<_UsageLimitDialog> createState() => _UsageLimitDialogState();
+}
+
+class _UsageLimitDialogState extends State<_UsageLimitDialog> {
+  bool _isLoading = false;
+  bool _isPlatformPaySupported = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPlatformPaySupport();
+  }
+
+  Future<void> _checkPlatformPaySupport() async {
+    try {
+      final isSupported = await StripePaymentService.isPlatformPaySupported();
+      if (mounted) {
+        setState(() {
+          _isPlatformPaySupported = isSupported;
+        });
+      }
+    } catch (e) {
+      print('Error checking platform pay support: $e');
+    }
+  }
+
+  Future<void> _initiatePayment(String planType) async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+    // Show loading dialog
+    _showProcessingDialog('Initiating payment...');
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        Navigator.pop(context); // Close loading dialog
+        _showErrorDialog('User not authenticated');
+        return;
+      }
+
+      final subscriptionData = await StripePaymentService.createSubscription(
+        email: user.email!,
+        userId: user.id,
+        planType: planType,
+        isYearly: false, // Hardcoded to monthly for the modal
+      );
+
+      final clientSecret = subscriptionData['latest_invoice']['payment_intent']['client_secret'];
+      if (clientSecret == null) {
+        Navigator.pop(context); // Close loading dialog
+        _showErrorDialog('Failed to create payment intent');
+        return;
+      }
+
+      Navigator.pop(context); // Close loading dialog
+
+      await _processPayment(planType, clientSecret, user.email!);
+
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      _showErrorDialog('Payment initiation failed: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _processPayment(String planType, String clientSecret, String email) async {
+    try {
+      _showProcessingDialog(_isPlatformPaySupported 
+          ? (Platform.isIOS ? 'Processing Apple Pay...' : 'Processing Google Pay...')
+          : 'Processing payment...');
+
+      final pricing = StripePaymentService.getPricing();
+      final key = '${planType}_monthly'; // Always use monthly price
+      final amount = pricing[key] ?? 0.0;
+      final planName = '${planType.toUpperCase()} Plan';
+
+      bool success = false;
+
+      if (_isPlatformPaySupported) {
+        success = await StripePaymentService.processPlatformPayPayment(
+          clientSecret: clientSecret,
+          email: email,
+          amount: amount,
+          planName: planName,
+        );
+      } else {
+        success = await StripePaymentService.confirmPayment(
+          clientSecret: clientSecret,
+          email: email,
+        );
+      }
+
+      Navigator.pop(context); // Close processing dialog
+
+      if (success) {
+        final subscriptionService = SubscriptionService();
+        await subscriptionService.getSubscriptionStatus();
+        _showSuccessDialog();
+      } else {
+        _showErrorDialog('Payment was not completed. Please try again.');
+      }
+
+    } catch (e) {
+      Navigator.pop(context); // Close processing dialog
+      _showErrorDialog('Payment failed: ${e.toString()}');
+    }
+  }
+
+  void _showProcessingDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black,
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Colors.white),
+            const SizedBox(width: 16),
+            Text(message, style: TextStyle(color: Colors.white)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 32),
+            const SizedBox(width: 12),
+            Text('Payment Successful!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text('Your plan has been upgraded!', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close success dialog
+              Navigator.of(context).pop(); // Close usage limit modal
+            },
+            child: Text('Continue', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: Row(
+          children: [
+            Icon(Icons.error, color: Colors.red, size: 32),
+            const SizedBox(width: 12),
+            Text('Payment Failed', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(message, style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final actionInfo = _getActionInfo(actionType);
+    final actionInfo = _getActionInfo(widget.actionType);
     final screenHeight = MediaQuery.of(context).size.height;
     
     return Dialog(
@@ -93,7 +277,7 @@ class _UsageLimitDialog extends StatelessWidget {
               const SizedBox(height: 8),
               
               Text(
-                message,
+                widget.message,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface,
@@ -154,7 +338,7 @@ class _UsageLimitDialog extends StatelessWidget {
                       price: '\$8.99/mo',
                       feature: actionInfo['proFeature'] as String,
                       color: Theme.of(context).colorScheme.secondary,
-                      onTap: () => _handleUpgrade(context, 'pro'),
+                      onTap: () => _initiatePayment('pro'),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -165,7 +349,7 @@ class _UsageLimitDialog extends StatelessWidget {
                       price: '\$14.99/mo',
                       feature: 'Unlimited Everything',
                       color: Theme.of(context).colorScheme.tertiary,
-                      onTap: () => _handleUpgrade(context, 'premium'),
+                      onTap: () => _initiatePayment('premium'),
                       isRecommended: true,
                     ),
                   ),
@@ -325,23 +509,5 @@ class _UsageLimitDialog extends StatelessWidget {
           'proFeature': 'More Actions',
         };
     }
-  }
-
-  void _handleUpgrade(BuildContext context, String planType) {
-    Navigator.of(context).pop();
-    // TODO: Implement actual upgrade flow
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$planType upgrade coming soon!'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-      ),
-    );
-    
-    // Navigate to subscription screen
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const SubscriptionScreen(),
-      ),
-    );
   }
 } 

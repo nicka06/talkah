@@ -19,26 +19,49 @@ if (!supabaseUrl || !supabaseServiceKey) {
   process.exit(1);
 }
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+console.log("Supabase client initialized.");
 
 // Google Cloud STT
 let speechClient = null;
 try {
-    const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT);
+    console.log("Attempting to initialize Google SpeechClient...");
+    const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT;
+    if (!credentialsJson) {
+        throw new Error("GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT is not set.");
+    }
+    const credentials = JSON.parse(credentialsJson);
     speechClient = new SpeechClient({
         projectId: process.env.GOOGLE_PROJECT_ID,
         credentials,
     });
+    console.log("Google SpeechClient initialized successfully.");
 } catch (error) {
-    console.error("Failed to initialize Google SpeechClient. STT will be disabled.", error);
+    console.error("CRITICAL: Failed to initialize Google SpeechClient. STT will be disabled.", error);
 }
 
 // OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OpenAI_Key,
-});
+let openai;
+try {
+    console.log("Attempting to initialize OpenAI client...");
+    const openaiApiKey = process.env.OpenAI_Key;
+    if (!openaiApiKey) {
+        throw new Error("OpenAI_Key is not set.");
+    }
+    openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+    console.log("OpenAI client initialized successfully.");
+} catch (error) {
+    console.error("CRITICAL: Failed to initialize OpenAI client.", error);
+}
 
 // ElevenLabs
 const ELEVENLABS_API_KEY = process.env.ElevenLabs_Key;
+if (!ELEVENLABS_API_KEY) {
+    console.warn("ElevenLabs_Key is not set. TTS will be disabled.");
+} else {
+    console.log("ElevenLabs API key found.");
+}
 
 // --- Globals ---
 
@@ -113,7 +136,7 @@ function stopAllTTS(connectionId) {
 
 async function handleLLM(connectionId, transcript) {
   const connectionData = activeConnections.get(connectionId);
-  if (!connectionData || !openai.apiKey) return;
+  if (!connectionData || !openai) return;
 
   connectionData.conversationHistory.push({ role: "user", content: transcript });
 
@@ -182,6 +205,7 @@ async function handleTTS(connectionId, textToSpeak) {
             if (connectionData.activeTTS.has(ttsId) && connectionData.socket.readyState === WebSocket.OPEN) {
                 const message = JSON.stringify({
                     event: "media",
+                    streamSid: connectionData.streamSid,
                     media: { payload: chunk.toString('base64') }
                 });
                 connectionData.socket.send(message);
@@ -217,7 +241,12 @@ function startConversation(connectionId) {
   setupCallTimer(connectionId);
 
   const decodedTopic = decodeURIComponent(connectionData.topic);
-  const systemPrompt = `You are a conversational AI. Your topic is "${decodedTopic}". Embody this topic. Be natural and conversational.`;
+  const systemPrompt = `You are a conversational voice AI. Your primary goal is to have a natural, engaging, spoken conversation. Adhere to the following rules at all times:
+1.  **One Thought Per Turn:** Respond with only one or two sentences at a time. Your goal is a fast-paced, back-and-forth conversation. Do not deliver long monologues. Wait for the user to speak before continuing.
+2.  **Use Simple, Spoken Language:** Write as if you were speaking. Avoid complex vocabulary, long sentences, and formal language. Your tone should be friendly and natural.
+3.  **Absolutely No Lists or Formatting:** Never use bullet points, numbered lists, or any markdown formatting. All responses must be in simple, plain paragraphs.
+4.  **Be an Active Listener:** Pay close attention to the user's questions and the words they use. Adapt your response to their input and sound like you are genuinely engaged in the dialogue.
+5.  **Your Topic:** The central theme of our conversation is "${decodedTopic}". Weave this topic into the conversation naturally, don't just state facts about it.`;
   
   sendToOpenAI(connectionId, systemPrompt, "system");
   sendToOpenAI(connectionId, `Hello! Let's talk about ${decodedTopic}.`, "user");
@@ -304,6 +333,7 @@ wss.on('connection', (ws, req) => {
   activeConnections.set(connectionId, {
     socket: ws,
     callSid: null,
+    streamSid: null,
     topic: 'default topic',
     conversationHistory: [],
     shouldWrapUp: false,
@@ -315,29 +345,36 @@ wss.on('connection', (ws, req) => {
     const message = JSON.parse(data);
     switch (message.event) {
       case "start":
-        const { callSid, customParameters } = message.start;
+        const { callSid, customParameters, streamSid } = message.start;
         const connectionData = activeConnections.get(connectionId);
         if(connectionData) {
             connectionData.callSid = callSid;
+            connectionData.streamSid = streamSid;
             connectionData.topic = customParameters.topic || 'general conversation';
-            console.log(`(ID: ${connectionId}) Twilio media stream started. CallSid: ${callSid}, Topic: ${connectionData.topic}`);
+            console.log(`(ID: ${connectionId}) Twilio media stream started. CallSid: ${callSid}, StreamSid: ${streamSid}, Topic: ${connectionData.topic}`);
         }
         
         if (speechClient) {
-          recognizeStream = speechClient.streamingRecognize({
-            config: { encoding: 'MULAW', sampleRateHertz: 8000, languageCode: 'en-US' },
-            interimResults: false,
-          })
-          .on('error', (error) => console.error(`(ID: ${connectionId}) STT Error:`, error))
-          .on('data', (data) => {
-            const transcript = data.results[0]?.alternatives[0]?.transcript || '';
-            if (transcript) {
-              console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
-              stopAllTTS(connectionId);
-              handleLLM(connectionId, transcript);
-            }
-          });
-          console.log(`(ID: ${connectionId}) STT stream initialized.`);
+          try {
+            recognizeStream = speechClient.streamingRecognize({
+              config: { encoding: 'MULAW', sampleRateHertz: 8000, languageCode: 'en-US' },
+              interimResults: false,
+            })
+            .on('error', (error) => console.error(`(ID: ${connectionId}) STT Stream Error:`, error))
+            .on('data', (data) => {
+              const transcript = data.results[0]?.alternatives[0]?.transcript || '';
+              if (transcript) {
+                console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
+                stopAllTTS(connectionId);
+                handleLLM(connectionId, transcript);
+              }
+            });
+            console.log(`(ID: ${connectionId}) STT stream initialized successfully.`);
+          } catch (error) {
+            console.error(`(ID: ${connectionId}) FAILED to initialize STT stream:`, error);
+            forceEndCall(connectionId, "STT initialization failed.");
+            return; // Stop further processing for this connection
+          }
         }
         
         pollForAmdResult(connectionId, callSid);

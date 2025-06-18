@@ -84,8 +84,8 @@ serve(async (req: Request) => {
     }
 
     // 6. Construct TwiML with <Connect><Stream>
-    const streamBaseUrl = `${EXTERNAL_WEBSOCKET_SERVICE_URL}/ws/audio-stream`;
-    const encodedTopic = encodeURIComponent(topic); // Still encode topic just in case for parameter value
+    const streamBaseUrl = EXTERNAL_WEBSOCKET_SERVICE_URL;
+    const encodedTopic = encodeURIComponent(topic);
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
