@@ -1,55 +1,41 @@
 # fly.toml app configuration file for websocket-server-ancient-shape-3559
-# Using explicit [[services]] for WebSocket handling
+app = "websocket-server-ancient-shape-3559"
+primary_region = "iad"
 
-app = 'websocket-server-ancient-shape-3559'
-primary_region = 'iad'
+[machines]
+  size = "shared-cpu-1x"
 
-[build]
-  # Assuming your Dockerfile is in the same directory as fly.toml
-  # If it's in the parent directory (e.g., project root) and your context is there, adjust path or ensure build context is websocket_server
-  # dockerfile = "Dockerfile" # Often not needed if Dockerfile is standard name and location relative to context
+[deploy]
+  strategy = "rolling"
+  min_machines_running = 1
 
-# Explicitly define how the app is run. This overrides the CMD in the Dockerfile.
-[processes]
-  app = "npm start"
-
-# HTTP Service (Port 80) - primarily for HTTP to HTTPS redirect
+# This service handles HTTP requests on port 80 and redirects them to HTTPS.
 [[services]]
-  internal_port = 8080 # Your Deno app's port
+  internal_port = 8080
   protocol = "tcp"
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 0
   processes = ["app"]
-
+ 
   [[services.ports]]
     port = 80
     handlers = ["http"]
-    force_https = true # Redirects HTTP to HTTPS (and thus WS to WSS implicitly)
+    force_https = true
 
-# HTTPS / WSS Service (Port 443)
+# This service handles secure WebSocket (WSS) and HTTPS traffic on port 443.
 [[services]]
-  internal_port = 8080 # Your Deno app's port
+  internal_port = 8080
   protocol = "tcp"
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 0
   processes = ["app"]
 
   [[services.ports]]
     port = 443
-    handlers = ["tls", "http"] # tls for HTTPS/WSS, http for the WebSocket upgrade request over TLS
+    handlers = ["tls", "http"]
   
-  # Optional: Define TCP health checks if needed, but Deno should exit on error
-  # which Fly.io will detect. HTTP checks are also an option.
-  # [[services.http_checks]]
-  #   interval = "10s"
-  #   timeout = "2s"
-  #   method = "GET"
-  #   path = "/" # Ensure your app responds 200 OK to this
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
 
-# VM Resources (adjust as needed)
-[[vm]]
-  memory = '1gb' # This was in your previous toml, keeping it.
-  cpu_kind = 'shared'
-  cpus = 1
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "10s"
+    grace_period = "5s"

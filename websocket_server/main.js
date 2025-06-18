@@ -1,125 +1,100 @@
-require('dotenv').config();
 const http = require('http');
-const { WebSocket, WebSocketServer } = require('ws');
+const WebSocket = require('ws');
+const { createClient } = require('@supabase/supabase-js');
 const { SpeechClient } = require('@google-cloud/speech');
 const OpenAI = require('openai');
 const axios = require('axios');
-const crypto = require('crypto');
+const crypto =require('crypto');
 
 const PORT = process.env.PORT || 8080;
 
 // --- API Client Initialization ---
 
+// Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("CRITICAL: Supabase environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are not set. Exiting.");
+  process.exit(1);
+}
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
 // Google Cloud STT
-const GOOGLE_PROJECT_ID = process.env.GOOGLE_PROJECT_ID;
-const GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT;
 let speechClient = null;
-if (GOOGLE_PROJECT_ID && GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT) {
-  try {
-    const credentials = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT);
+try {
+    const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT);
     speechClient = new SpeechClient({
-      projectId: GOOGLE_PROJECT_ID,
-      credentials: {
-        client_email: credentials.client_email,
-        private_key: credentials.private_key.replace(/\\n/g, '\n'),
-      },
+        projectId: process.env.GOOGLE_PROJECT_ID,
+        credentials,
     });
-    console.log("Google SpeechClient initialized successfully.");
-  } catch (error) {
-    console.error("Failed to initialize Google SpeechClient:", error);
-  }
-} else {
-  console.warn("Google Cloud STT env vars not set. STT will be disabled.");
+} catch (error) {
+    console.error("Failed to initialize Google SpeechClient. STT will be disabled.", error);
 }
 
 // OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OpenAI_Key,
 });
-if (process.env.OpenAI_Key) {
-    console.log("OpenAI Client initialized.");
-} else {
-    console.warn("OpenAI_Key not set. LLM will be disabled.");
-}
 
-// NOTE: We are no longer using the ElevenLabs Node.js library due to instability.
-// We will make direct API calls instead.
+// ElevenLabs
 const ELEVENLABS_API_KEY = process.env.ElevenLabs_Key;
-if (ELEVENLABS_API_KEY) {
-    console.log("ElevenLabs API Key found.");
-} else {
-    console.warn("ElevenLabs_Key not set. TTS will be disabled.");
-}
 
-// Store active connection details, including conversation history
+// --- Globals ---
+
 const activeConnections = new Map();
-
-// Call duration limits (in milliseconds)
 const CALL_DURATION_LIMITS = {
-  SOFT_WARNING: 2.5 * 60 * 1000,    // 2:30 - start wrapping up
-  URGENT_WARNING: 2.83 * 60 * 1000, // 2:50 - finish immediately  
-  HARD_CUTOFF: 3 * 60 * 1000        // 3:00 - end call
+  SOFT_WARNING: 2.5 * 60 * 1000,
+  URGENT_WARNING: 2.83 * 60 * 1000,
+  HARD_CUTOFF: 3 * 60 * 1000
 };
+
+// --- Core Functions ---
 
 function setupCallTimer(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
 
-  const startTime = Date.now();
-  connectionData.callStartTime = startTime;
+  const { callSid } = connectionData;
 
-  // 2:30 - Soft warning to start concluding
   connectionData.softWarningTimeout = setTimeout(() => {
-    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) 2:30 reached - adding soft wrap-up prompt`);
+    console.log(`(ID: ${connectionId}, CallSID: ${callSid}) 2:30 reached - adding soft wrap-up prompt`);
     connectionData.shouldWrapUp = true;
   }, CALL_DURATION_LIMITS.SOFT_WARNING);
 
-  // 2:50 - Urgent warning to finish immediately
   connectionData.urgentWarningTimeout = setTimeout(() => {
-    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) 2:50 reached - adding urgent finish prompt`);
+    console.log(`(ID: ${connectionId}, CallSID: ${callSid}) 2:50 reached - adding urgent finish prompt`);
     connectionData.shouldFinishNow = true;
   }, CALL_DURATION_LIMITS.URGENT_WARNING);
 
-  // 3:00 - Hard cutoff
   connectionData.hardCutoffTimeout = setTimeout(() => {
-    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) 3:00 reached - ending call`);
-    endCallHard(connectionId);
+    console.log(`(ID: ${connectionId}, CallSID: ${callSid}) 3:00 reached - ending call`);
+    forceEndCall(connectionId);
   }, CALL_DURATION_LIMITS.HARD_CUTOFF);
 
-  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Call timer started - 3 minute limit active`);
+  console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Call timer started - 3 minute limit active`);
 }
 
-function sendWarningMessage(connectionId, warningText) {
+function clearCallTimers(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
 
-  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Sending warning: ${warningText}`);
-  
-  // Add system message to conversation history
-  connectionData.conversationHistory.push({ 
-    role: "system", 
-    content: `URGENT: ${warningText}` 
-  });
-
-  // Generate AI response to the warning
-  handleLLM(connectionId, `[SYSTEM WARNING: ${warningText}]`);
+  clearTimeout(connectionData.softWarningTimeout);
+  clearTimeout(connectionData.urgentWarningTimeout);
+  clearTimeout(connectionData.hardCutoffTimeout);
+  console.log(`(ID: ${connectionId}) Call timers cleared`);
 }
 
-function forceEndCall(connectionId) {
-  const connectionData = activeConnections.get(connectionId);
-  if (!connectionData) return;
+function forceEndCall(connectionId, reason = "Call duration limit reached") {
+    const connectionData = activeConnections.get(connectionId);
+    if (!connectionData) return;
 
-  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Force ending call - 3 minute limit reached`);
-  
-  // Send a final goodbye message
-  handleTTS(connectionId, "Time's up! Thanks for calling. Goodbye!").then(() => {
-    // Close the WebSocket connection after the goodbye message
-    setTimeout(() => {
-      if (connectionData.socket && connectionData.socket.readyState === WebSocket.OPEN) {
-        connectionData.socket.close(1000, "Call duration limit reached");
-      }
-    }, 2000); // Give 2 seconds for the goodbye message to play
-  });
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Force ending call. Reason: ${reason}`);
+    
+    // Use a generic goodbye that doesn't rely on TTS, in case that's part of the issue
+    if (connectionData.socket && connectionData.socket.readyState === WebSocket.OPEN) {
+        connectionData.socket.close(1000, reason);
+    }
 }
 
 function stopAllTTS(connectionId) {
@@ -129,68 +104,26 @@ function stopAllTTS(connectionId) {
   const activeCount = connectionData.activeTTS.size;
   if (activeCount > 0) {
     console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Stopping ${activeCount} active TTS streams due to user speech`);
-    
-    // Clear all active TTS streams
     connectionData.activeTTS.clear();
-    
-    // Call interruption handler if available
     if (connectionData.interruptTTS) {
       connectionData.interruptTTS();
     }
   }
 }
 
-function clearCallTimers(connectionId) {
-  const connectionData = activeConnections.get(connectionId);
-  if (!connectionData) return;
-
-  if (connectionData.timer1) {
-    clearTimeout(connectionData.timer1);
-    connectionData.timer1 = null;
-  }
-  if (connectionData.timer2) {
-    clearTimeout(connectionData.timer2);
-    connectionData.timer2 = null;
-  }
-  if (connectionData.timer3) {
-    clearTimeout(connectionData.timer3);
-    connectionData.timer3 = null;
-  }
-  
-  console.log(`(ID: ${connectionId}) Call timers cleared`);
-}
-
-// --- Core Logic ---
-
 async function handleLLM(connectionId, transcript) {
   const connectionData = activeConnections.get(connectionId);
-  if (!connectionData || !openai.apiKey) {
-    console.log(`(ID: ${connectionId}) LLM skipped: Connection data or API key missing.`);
-    return;
-  }
+  if (!connectionData || !openai.apiKey) return;
 
-  // Add user's message to history
   connectionData.conversationHistory.push({ role: "user", content: transcript });
 
-  // Check if we need to inject time-based prompts
   let modifiedMessages = [...connectionData.conversationHistory];
-  
   if (connectionData.shouldFinishNow) {
-    // 2:50 - Urgent finish prompt
-    modifiedMessages.push({
-      role: "system", 
-      content: "URGENT: You have only 10 seconds left in this call. End the conversation immediately with a brief, polite goodbye. Do not start new topics or ask questions."
-    });
-    connectionData.shouldFinishNow = false; // Only inject once
-    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Injected urgent finish prompt`);
+    modifiedMessages.push({ role: "system", content: "URGENT: You have only 10 seconds left. End the conversation immediately with a brief, polite goodbye." });
+    connectionData.shouldFinishNow = false;
   } else if (connectionData.shouldWrapUp) {
-    // 2:30 - Soft wrap-up prompt
-    modifiedMessages.push({
-      role: "system", 
-      content: "The call is approaching its time limit. Begin wrapping up the conversation naturally. Start concluding your current topic and prepare for a polite goodbye within the next 30 seconds."
-    });
-    connectionData.shouldWrapUp = false; // Only inject once
-    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Injected soft wrap-up prompt`);
+    modifiedMessages.push({ role: "system", content: "The call is approaching its time limit. Start wrapping up the conversation naturally." });
+    connectionData.shouldWrapUp = false;
   }
 
   console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Sending to OpenAI:`, transcript);
@@ -210,307 +143,240 @@ async function handleLLM(connectionId, transcript) {
       if (content) {
         fullResponse += content;
         sentenceBuffer += content;
-        
         const sentenceEndIndex = sentenceBuffer.search(/[.!?]/);
         if (sentenceEndIndex !== -1) {
           const sentence = sentenceBuffer.substring(0, sentenceEndIndex + 1).trim();
-          if (sentence) {
-            // Don't await. This lets TTS start for the first sentence 
-            // while the LLM works on the next one.
-            handleTTS(connectionId, sentence).catch(error => {
-              console.error(`(ID: ${connectionId}) TTS error for sentence:`, error.message);
-            }); 
-          }
+          if (sentence) handleTTS(connectionId, sentence);
           sentenceBuffer = sentenceBuffer.substring(sentenceEndIndex + 1);
         }
       }
     }
-
-    // Send any remaining text in the buffer
-    if (sentenceBuffer.trim()) {
-      handleTTS(connectionId, sentenceBuffer.trim()).catch(error => {
-        console.error(`(ID: ${connectionId}) TTS error for remaining buffer:`, error.message);
-      });
-    }
-
+    if (sentenceBuffer.trim()) handleTTS(connectionId, sentenceBuffer.trim());
     if (fullResponse) {
        console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Full response from OpenAI:`, fullResponse);
        connectionData.conversationHistory.push({ role: "assistant", content: fullResponse });
     }
-
   } catch (error) {
     console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) OpenAI error:`, error);
   }
 }
 
 async function handleTTS(connectionId, textToSpeak) {
-  const connectionData = activeConnections.get(connectionId);
-  if (!connectionData || !ELEVENLABS_API_KEY) {
-    console.log(`(ID: ${connectionId}) TTS skipped: Connection data or API key missing.`);
-    return;
-  }
+    const connectionData = activeConnections.get(connectionId);
+    if (!connectionData || !ELEVENLABS_API_KEY || !textToSpeak) return;
 
-  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Streaming to ElevenLabs: "${textToSpeak}"`);
+    const ttsId = crypto.randomUUID();
+    connectionData.activeTTS.add(ttsId);
 
-  const voiceId = "EXAVITQu4vr4xnSDxMaL"; // Sarah's Voice ID
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=ulaw_8000`;
-  
-  // Return a promise that resolves when the stream is finished
-  return new Promise(async (resolve, reject) => {
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Streaming to ElevenLabs: "${textToSpeak}"`);
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'}/stream?output_format=ulaw_8000`;
+
     try {
-      const response = await axios.post(url, {
-          text: textToSpeak,
-      }, {
-          headers: {
-              'xi-api-key': ELEVENLABS_API_KEY,
-              'Content-Type': 'application/json',
-              'Accept': 'audio/mulaw'
-          },
-          responseType: 'stream',
-          timeout: 10000 // 10 second timeout
-      });
+        const response = await axios.post(url, { text: textToSpeak }, {
+            headers: { 'xi-api-key': ELEVENLABS_API_KEY },
+            responseType: 'stream'
+        });
 
-      // Track this TTS stream for barge-in functionality
-      const ttsId = crypto.randomUUID();
-      if (!connectionData.activeTTS) {
-        connectionData.activeTTS = new Set();
-      }
-      connectionData.activeTTS.add(ttsId);
-      
-      let isInterrupted = false;
+        const stream = response.data;
+        stream.on('data', (chunk) => {
+            if (connectionData.activeTTS.has(ttsId) && connectionData.socket.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({
+                    event: "media",
+                    media: { payload: chunk.toString('base64') }
+                });
+                connectionData.socket.send(message);
+            } else {
+                stream.destroy();
+            }
+        });
 
-      const cleanup = () => {
-        if (connectionData.activeTTS) {
-          connectionData.activeTTS.delete(ttsId);
-        }
-        if (response.data && !response.data.destroyed) {
-          response.data.destroy();
-        }
-      };
-
-      response.data.on('data', (chunk) => {
-        try {
-          // Check if this TTS has been interrupted
-          if (isInterrupted || !connectionData.activeTTS?.has(ttsId)) {
-            console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) TTS interrupted, stopping audio stream for: "${textToSpeak}"`);
-            cleanup();
-            resolve();
-            return;
-          }
-
-          if (connectionData.socket.readyState === WebSocket.OPEN && connectionData.twilioStreamSid) {
-            const audioBase64 = chunk.toString('base64');
-            const mediaMessage = JSON.stringify({
-              event: "media",
-              streamSid: connectionData.twilioStreamSid,
-              media: {
-                payload: audioBase64,
-              },
-            });
-            connectionData.socket.send(mediaMessage);
-          }
-        } catch (error) {
-          console.error(`(ID: ${connectionId}) Error sending audio data:`, error.message);
-          cleanup();
-          resolve();
-        }
-      });
-
-      response.data.on('end', () => {
-        console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Finished streaming TTS for: "${textToSpeak}"`);
-        cleanup();
-        resolve();
-      });
-
-      response.data.on('error', (err) => {
-        console.error(`(ID: ${connectionId}) ElevenLabs stream error:`, err.message);
-        cleanup();
-        resolve(); // Resolve instead of reject to prevent crashes
-      });
-
-      // Set up interruption handler
-      connectionData.interruptTTS = () => {
-        isInterrupted = true;
-        cleanup();
-        resolve();
-      };
+        await new Promise((resolve, reject) => {
+            stream.on('end', resolve);
+            stream.on('error', reject);
+        });
 
     } catch (error) {
-      console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) ElevenLabs error:`, error.response ? error.response.status : error.message);
-      resolve(); // Resolve instead of reject to prevent crashes
+        console.error(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) ElevenLabs error:`, error.response ? error.response.status : error.message);
+    } finally {
+        if (connectionData.activeTTS.has(ttsId)) {
+          console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Finished streaming TTS for: "${textToSpeak}"`);
+          connectionData.activeTTS.delete(ttsId);
+        }
     }
-  });
+}
+
+/**
+ * Starts the AI conversation by sending the initial system prompt and user message.
+ * @param {string} connectionId - The unique ID for the WebSocket connection.
+ */
+function startConversation(connectionId) {
+  const connectionData = activeConnections.get(connectionId);
+  if (!connectionData) return;
+  
+  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Human detected (or AMD timed out). Starting conversation.`);
+  setupCallTimer(connectionId);
+
+  const decodedTopic = decodeURIComponent(connectionData.topic);
+  const systemPrompt = `You are a conversational AI. Your topic is "${decodedTopic}". Embody this topic. Be natural and conversational.`;
+  
+  sendToOpenAI(connectionId, systemPrompt, "system");
+  sendToOpenAI(connectionId, `Hello! Let's talk about ${decodedTopic}.`, "user");
+}
+
+/**
+ * Sends a message to the OpenAI API for processing.
+ * This is a placeholder for where you'd integrate with your LLM.
+ * @param {string} connectionId - The unique ID for the WebSocket connection.
+ * @param {string} message - The message to send.
+ * @param {string} role - The role of the sender ('system' or 'user').
+ */
+function sendToOpenAI(connectionId, message, role) {
+    const connectionData = activeConnections.get(connectionId);
+    if (!connectionData) return;
+
+    // In a real implementation, you would add the message to the conversation
+    // history and then call handleLLM. For this placeholder, we'll just log it.
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Pretending to send to OpenAI [${role}]: "${message}"`);
+    
+    // If the role is 'user', it implies we need a response from the assistant.
+    if (role === 'user') {
+        handleLLM(connectionId, message);
+    } else if (role === 'system') {
+        // Just add system messages to history without triggering a response
+        connectionData.conversationHistory.push({ role: "system", content: message });
+    }
+}
+
+/**
+ * Polls the database waiting for the AMD result for a given call.
+ * @param {string} connectionId - The unique ID for the WebSocket connection.
+ * @param {string} callSid - The Twilio Call SID to look for.
+ */
+async function pollForAmdResult(connectionId, callSid) {
+  const maxAttempts = 10;
+  const interval = 1000;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    const { data: amdRecord, error } = await supabase
+      .from('amd_waiting_room')
+      .select('*')
+      .eq('call_sid', callSid)
+      .single();
+
+    if (amdRecord) {
+      console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Found AMD result in DB: ${amdRecord.answered_by}. Processing now.`);
+      handleAmdDetection(connectionId, amdRecord.answered_by);
+      supabase.from('amd_waiting_room').delete().eq('call_sid', callSid); // Fire and forget cleanup
+      return;
+    }
+
+    if (error && error.code !== 'PGRST116') {
+      console.error(`(ID: ${connectionId}, CallSID: ${callSid}) Error checking AMD waiting room:`, error);
+      forceEndCall(connectionId, 'Error checking AMD status.');
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+
+  console.log(`(ID: ${connectionId}, CallSID: ${callSid}) AMD result not found after ${maxAttempts} attempts. Proceeding as human.`);
+  startConversation(connectionId);
 }
 
 // --- WebSocket Server ---
 
 const server = http.createServer((req, res) => {
-  if (req.method === 'GET' && req.url === '/') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('WebSocket server is running.');
-  } else {
-    res.writeHead(404);
-    res.end();
-  }
+    if (req.url === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK');
+    } else {
+        res.writeHead(404);
+        res.end();
+    }
 });
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
   const connectionId = crypto.randomUUID();
   console.log(`(ID: ${connectionId}) WebSocket connection opened.`);
-  activeConnections.set(connectionId, { socket: ws, conversationHistory: [] });
-
   let recognizeStream = null;
 
-  ws.on('message', async (data) => {
-    let message;
-    try {
-      message = JSON.parse(data.toString());
-      const connectionData = activeConnections.get(connectionId);
-      if (!connectionData) return;
+  activeConnections.set(connectionId, {
+    socket: ws,
+    callSid: null,
+    topic: 'default topic',
+    conversationHistory: [],
+    shouldWrapUp: false,
+    shouldFinishNow: false,
+    activeTTS: new Set(),
+  });
 
-      switch (message.event) {
-        case 'start':
-          const { streamSid, customParameters } = message.start;
-          const { callSid, topic, languageCode = 'en-US' } = customParameters;
-          
-          console.log(`(ID: ${connectionId}) Twilio media stream started. SID: ${streamSid}, CallSid: ${callSid}`);
-          
-          connectionData.twilioStreamSid = streamSid;
-          connectionData.callSid = callSid;
-
-          // Setup 3-minute call timer
-          setupCallTimer(connectionId);
-
-          // Setup conversation
-          const decodedTopic = decodeURIComponent(topic);
-          const systemPrompt = `You are a conversational AI that embodies and acts on the given topic directly. Topic: "${decodedTopic}". Instead of asking questions about the topic, immediately start acting, speaking, or behaving according to what the topic describes. If it's a character or persona, become that character. If it's a style of speaking, use that style. If it's an activity or subject, dive right into it. Be natural and conversational while fully embodying the topic throughout the conversation.`;
-          connectionData.conversationHistory.push({ role: "system", content: systemPrompt });
-
-          // Generate an appropriate initial response based on the topic
-          let initialGreeting;
-          const topicLower = decodedTopic.toLowerCase();
-          
-          if (topicLower.includes('pirate')) {
-            initialGreeting = "Ahoy there, matey! Welcome aboard me ship!";
-          } else if (topicLower.includes('shakespeare') || topicLower.includes('elizabethan')) {
-            initialGreeting = "Hark! Good morrow to thee, fair friend!";
-          } else if (topicLower.includes('robot') || topicLower.includes('ai')) {
-            initialGreeting = "GREETINGS, HUMAN. INITIATING CONVERSATION PROTOCOL.";
-          } else if (topicLower.includes('southern') || topicLower.includes('cowboy')) {
-            initialGreeting = "Well howdy there, partner! Nice to make your acquaintance!";
-          } else if (topicLower.includes('meditation') || topicLower.includes('zen')) {
-            initialGreeting = "Take a deep breath... Let's find peace together in this moment.";
-          } else if (topicLower.includes('coach') || topicLower.includes('motivational')) {
-            initialGreeting = "Hey there, champion! Ready to unlock your potential? Let's go!";
-          } else {
-            // Default: try to embody the topic directly
-            initialGreeting = `Hello! I'm ready to dive into ${decodedTopic} with you right now!`;
-          }
-          
-          connectionData.conversationHistory.push({ role: "assistant", content: initialGreeting });
-          
-          // SPEED OPTIMIZATION: Start STT immediately, don't wait for TTS
-          if (speechClient) {
-            console.log(`(ID: ${connectionId}) Initializing STT stream.`);
-            try {
-              recognizeStream = speechClient.streamingRecognize({
-                config: {
-                  encoding: 'MULAW',
-                  sampleRateHertz: 8000,
-                  languageCode: languageCode,
-                  profanityFilter: false,
-                  enableAutomaticPunctuation: true,
-                },
-                interimResults: true,
-              })
-              .on('error', (err) => {
-                  console.error(`(ID: ${connectionId}) STT Error:`, err.message);
-                  // Don't close WebSocket on STT error, just log it
-                  if (recognizeStream) {
-                    recognizeStream.destroy();
-                    recognizeStream = null;
-                  }
-              })
-              .on('data', (data) => {
-                  try {
-                    const result = data.results[0];
-                    if (result && result.alternatives[0]) {
-                      const transcript = result.alternatives[0].transcript.trim();
-                      
-                      // Barge-in: Stop TTS immediately when user starts speaking
-                      // We do this on interim results to be more responsive
-                      if (transcript && transcript.length > 2) { // Minimum 3 characters to avoid false triggers
-                        stopAllTTS(connectionId);
-                      }
-                      
-                      // Only process final results for LLM
-                      if (result.isFinal && transcript) {
-                        console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Final transcript: "${transcript}"`);
-                        handleLLM(connectionId, transcript);
-                      }
-                    }
-                  } catch (error) {
-                    console.error(`(ID: ${connectionId}) STT data processing error:`, error.message);
-                  }
-              });
-              console.log(`(ID: ${connectionId}) STT stream ready.`);
-            } catch (error) {
-              console.error(`(ID: ${connectionId}) Failed to initialize STT:`, error.message);
-            }
-          }
-          
-          // Start initial greeting TTS (non-blocking)
-          handleTTS(connectionId, initialGreeting).catch(error => {
-            console.error(`(ID: ${connectionId}) Initial TTS error:`, error.message);
-          });
-          break;
-
-        case 'media':
-          if (recognizeStream) {
-            recognizeStream.write(Buffer.from(message.media.payload, 'base64'));
-          }
-          break;
+  ws.on('message', (data) => {
+    const message = JSON.parse(data);
+    switch (message.event) {
+      case "start":
+        const { callSid, customParameters } = message.start;
+        const connectionData = activeConnections.get(connectionId);
+        if(connectionData) {
+            connectionData.callSid = callSid;
+            connectionData.topic = customParameters.topic || 'general conversation';
+            console.log(`(ID: ${connectionId}) Twilio media stream started. CallSid: ${callSid}, Topic: ${connectionData.topic}`);
+        }
         
-        case 'stop':
-          console.log(`(ID: ${connectionId}) Twilio media stream stopped.`);
-          if (recognizeStream) {
-            recognizeStream.destroy();
-            recognizeStream = null;
-          }
-          ws.close(1000, "Stream stopped");
-          break;
-      }
-    } catch (err) {
-      console.error(`(ID: ${connectionId}) Error processing message:`, err);
+        if (speechClient) {
+          recognizeStream = speechClient.streamingRecognize({
+            config: { encoding: 'MULAW', sampleRateHertz: 8000, languageCode: 'en-US' },
+            interimResults: false,
+          })
+          .on('error', (error) => console.error(`(ID: ${connectionId}) STT Error:`, error))
+          .on('data', (data) => {
+            const transcript = data.results[0]?.alternatives[0]?.transcript || '';
+            if (transcript) {
+              console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
+              stopAllTTS(connectionId);
+              handleLLM(connectionId, transcript);
+            }
+          });
+          console.log(`(ID: ${connectionId}) STT stream initialized.`);
+        }
+        
+        pollForAmdResult(connectionId, callSid);
+        break;
+
+      case "media":
+        if (recognizeStream) recognizeStream.write(message.media.payload);
+        break;
+
+      case "stop":
+        console.log(`(ID: ${connectionId}) Twilio media stream stopped.`);
+        cleanup();
+        break;
     }
   });
 
   const cleanup = () => {
-      console.log(`(ID: ${connectionId}) Cleaning up connection.`);
-      if (recognizeStream) {
-        recognizeStream.destroy();
-        recognizeStream = null;
-      }
-      // Clear all call timers
-      clearCallTimers(connectionId);
-      // Stop any active TTS streams
-      stopAllTTS(connectionId);
-      activeConnections.delete(connectionId);
-  }
-
-  ws.on('close', (code, reason) => {
-    console.log(`(ID: ${connectionId}) WebSocket closed. Code: ${code}, Reason: ${reason}`);
-    cleanup();
-  });
-
-  ws.on('error', (err) => {
-    console.error(`(ID: ${connectionId}) WebSocket error:`, err);
-    cleanup();
-  });
+    console.log(`(ID: ${connectionId}) Cleaning up connection resources.`);
+    clearCallTimers(connectionId);
+    if (recognizeStream) recognizeStream.destroy();
+    activeConnections.delete(connectionId);
+  };
+  
+  ws.on('close', () => cleanup());
+  ws.on('error', () => cleanup());
 });
 
-server.listen(PORT, () => {
-  console.log(`WebSocket server listening on port ${PORT}`);
-}); 
+function handleAmdDetection(connectionId, answeredBy) {
+  const connectionData = activeConnections.get(connectionId);
+  if (!connectionData) return;
+
+  if (answeredBy && (answeredBy === 'machine_start' || answeredBy === 'fax')) {
+    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Machine/Fax detected ('${answeredBy}'). Ending call.`);
+    forceEndCall(connectionId, "Voicemail or fax detected");
+  } else {
+    startConversation(connectionId);
+  }
+}
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server is listening on 0.0.0.0:${PORT}`);
+});

@@ -117,6 +117,7 @@ serve(async (req: Request) => {
     // This URL will point to your 'twilio-voice-connect-stream' Edge Function
     // It needs to be publicly accessible by Twilio.
     const twimlWebhookUrl = `${FUNCTIONS_BASE_URL}twilio-voice-connect-stream`;
+    const amdWebhookUrl = `${FUNCTIONS_BASE_URL}amd-callback`;
 
     // 8. Make the outbound call using Twilio
     const call = await twilioClient.calls.create({
@@ -126,6 +127,11 @@ serve(async (req: Request) => {
       method: "GET", // Method Twilio will use to request the TwiML URL
       statusCallback: `${FUNCTIONS_BASE_URL}twilio-status-callback`, // For call status updates
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed', 'failed'],
+      // Add Answering Machine Detection (AMD) parameters
+      machineDetection: 'Enable', // Enable AMD
+      asyncAmd: true, // Use async AMD to avoid delaying call connection
+      asyncAmdStatusCallback: amdWebhookUrl, // Webhook to send AMD result
+      asyncAmdStatusCallbackMethod: 'GET' // Use GET to match amd-callback function
     });
 
     console.log(`Twilio call initiated. SID: ${call.sid}`);

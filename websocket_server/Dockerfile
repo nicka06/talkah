@@ -2,6 +2,9 @@
 # Using a specific version for stability, -slim is a good choice for smaller size
 FROM node:20-slim
 
+# Declare a build argument that can be passed in from fly.toml
+ARG CACHE_BUSTER
+
 # Set the working directory in the container
 WORKDIR /app
 
@@ -10,8 +13,8 @@ WORKDIR /app
 # and `npm install` is run only if they change.
 COPY package*.json ./
 
-# Install app dependencies
-RUN npm install
+# Install app dependencies and verify key packages exist
+RUN npm install && ls -la node_modules/openai && ls -la node_modules/@google-cloud/speech
 
 # Bundle app source
 COPY main.js .

@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "WebSocket server for real-time transcription and AI conversation.",
   "main": "main.js",
+  "// Cache-busting comment": "1750266150",
   "scripts": {
     "start": "node main.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.43.5",
     "axios": "^1.7.2",
     "@google-cloud/speech": "^6.5.0",
     "dotenv": "^16.4.5",
