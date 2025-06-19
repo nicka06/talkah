@@ -1,221 +1,146 @@
-# Subscription Plan Change Roadmap - SIMPLIFIED
+# Subscription System Roadmap
 
-## Current State
-- Immediate plan changes for both upgrades and downgrades
-- Users lose access immediately when downgrading (poor UX)
-- No prorated billing or end-of-period handling
+## Current Status ✅
+- ✅ Stripe webhook 401 errors fixed (JWT verification disabled)
+- ✅ Plan detection working (converts Stripe Price IDs to plan IDs)
+- ✅ Subscription cancellation flow working (pending plan changes tracked)
+- ✅ Customer Portal integration working
+- ✅ Upgrade/downgrade button logic working for plan tiers
 
-## Target State
-- **Upgrades**: Immediate with prorated billing (use existing `create-stripe-subscription`)
-- **Downgrades**: Scheduled for end of billing period (use existing `create-customer-portal-session`)
-- Users keep current plan benefits until paid period expires
-- Clear UI showing pending changes and effective dates
+## Active Issue 🔧
+**Monthly/Yearly Toggle Issue**: When user is on Pro Monthly and toggles to Yearly view, Pro plan shows "Current Plan" instead of "Switch to Yearly".
 
----
-
-## SIMPLIFIED APPROACH - Using Existing Functions
-
-### Existing Functions We'll Use:
-1. **`create-stripe-subscription`**: For upgrades and plan changes to paid plans
-2. **`create-customer-portal-session`**: For downgrades and cancellations
-3. **`stripe-webhook`**: Enhanced to handle pending plan changes
-
-### Functions to DELETE:
-- ~~`schedule-plan-downgrade`~~ (deleted - not needed)
-- ~~`cancel-scheduled-downgrade`~~ (not created - not needed)
-- ~~`immediate-plan-upgrade`~~ (not needed - use existing create-stripe-subscription)
+**Problem**: Button logic only checks plan tier (`pro` vs `premium`) but doesn't consider the billing interval (`monthly` vs `yearly`) when determining if it's the current plan.
 
 ---
 
-## Phase 1: Database Schema Updates ✅ DONE
-- Added pending plan fields to users table
-- Created plan_changes history table
-- Added RLS policies
+# Plan: Fix Monthly/Yearly Toggle Logic
+
+## The Simple Fix Approach
+
+**Keep everything the same** except make the button logic aware of billing intervals.
+
+### Current Behavior:
+- User on **Pro Monthly**
+- Toggle to **Yearly** view  
+- Pro button shows: **"Current Plan"** ❌ (wrong)
+
+### Desired Behavior:
+- User on **Pro Monthly**
+- Toggle to **Yearly** view
+- Pro button shows: **"Switch to Yearly"** ✅ (correct)
 
 ---
 
-## Phase 2: Stripe Integration Updates (SIMPLIFIED)
+## Phase 1: Add Billing Interval to User Data ✅ ALREADY DONE
 
-### 2.1 NO NEW FUNCTIONS NEEDED
-- **For Upgrades**: Use existing `create-stripe-subscription` function
-- **For Downgrades**: Use existing `create-customer-portal-session` function
+**Good news**: Users table already has `billing_interval` column!
 
-### 2.2 Update Stripe Webhook (stripe-webhook/index.ts)
-Enhanced to handle:
-- `customer.subscription.updated` events when `cancel_at_period_end` changes
-- Detect when subscription is scheduled for cancellation
-- Update our database pending plan fields accordingly
-- Process actual cancellations at period end
+```sql
+-- Verify billing_interval column exists
+SELECT billing_interval FROM users WHERE subscription_plan_id IS NOT NULL LIMIT 1;
+```
 
-### 2.3 Update Existing Functions (Minor Changes)
-- **create-customer-portal-session**: Already works perfectly for downgrades
-- **create-stripe-subscription**: May need minor updates for handling plan switches
+## Phase 2: Update Backend to Track Billing Interval
 
----
+### 2.1 Update Webhook ✅ ALREADY WORKING
+The webhook already extracts billing interval from Stripe and stores it in `subscription_events`. We just need to also store it in the `users` table.
 
-## Phase 3: Backend Logic Updates
-
-### 3.1 Subscription Service Updates
+### 2.2 Modify getCurrentPlanId() Service
+Instead of returning just `'pro'`, return current plan + current billing interval:
 ```typescript
-// Updated handlePlanChange logic
-async handlePlanChangeRequest(currentPlan: string, targetPlan: string) {
-  const planHierarchy = { 'free': 0, 'pro': 1, 'premium': 2 };
-  const isUpgrade = planHierarchy[targetPlan] > planHierarchy[currentPlan];
-  
-  if (isUpgrade || targetPlan !== 'free') {
-    // Use existing create-stripe-subscription for upgrades/plan changes
-    return await createStripeSubscription(targetPlan);
+// Current: returns 'pro'
+// New: returns { planId: 'pro', billingInterval: 'monthly' }
+```
+
+## Phase 3: Update Frontend Button Logic
+
+### 3.1 Modify SubscriptionPlans Component
+Update the button logic to consider both plan tier AND billing interval:
+
+```typescript
+// Current logic:
+const isCurrentPlan = plan.id === currentPlanId
+
+// New logic:
+const isCurrentPlan = plan.id === currentPlanId && 
+                     currentBillingInterval === (isYearly ? 'yearly' : 'monthly')
+```
+
+### 3.2 Smart Button Text Logic
+```typescript
+if (plan.id === currentPlanId) {
+  if (currentBillingInterval === (isYearly ? 'yearly' : 'monthly')) {
+    return { text: 'Current Plan', disabled: true }
   } else {
-    // Use existing create-customer-portal-session for downgrades to free
-    return await createCustomerPortalSession();
+    const newInterval = isYearly ? 'Yearly' : 'Monthly'
+    return { text: `Switch to ${newInterval}`, disabled: false }
   }
 }
 ```
 
-### 3.2 Add Pending Plan Detection
-```typescript
-interface UserSubscriptionStatus {
-  currentPlan: string;
-  pendingChange?: {
-    targetPlan: string;
-    effectiveDate: Date;
-    changeType: 'downgrade' | 'cancel';
-  };
-}
-```
+## Phase 4: Handle Interval Switching
+
+### 4.1 Update handlePlanChange()
+When user clicks "Switch to Yearly":
+- Extract current plan tier (`pro`)
+- Use toggle state for new interval (`yearly`)
+- Create subscription with same tier but new interval
 
 ---
 
-## Phase 4: Frontend/UI Updates
+## Implementation Steps
 
-### 4.1 Subscription Plans Component Logic
-```typescript
-const getButtonConfig = () => {
-  if (isCurrentPlan) {
-    return { text: 'Current Plan', disabled: true, className: 'gray' };
-  }
+### Step 1: Backend Data Collection
+1. **Update webhook** to store `billing_interval` in users table
+2. **Modify getCurrentPlanId()** to return plan + interval data
+3. **Test webhook** stores interval correctly
 
-  if (thisPlanLevel > currentPlanLevel) {
-    // Upgrade - use create-stripe-subscription
-    return { 
-      text: 'Upgrade', 
-      disabled: false, 
-      className: 'black',
-      action: 'create-subscription'
-    };
-  } else {
-    // Downgrade - use customer portal
-    return { 
-      text: 'Downgrade', 
-      disabled: false, 
-      className: 'orange',
-      action: 'customer-portal'
-    };
-  }
-};
-```
+### Step 2: Frontend Logic Update  
+1. **Update subscription service** to fetch current billing interval
+2. **Modify button logic** to consider current interval vs toggle state
+3. **Add interval switching** in handlePlanChange()
 
-### 4.2 Updated Plan Change Handler
-```typescript
-const handlePlanChange = async (planId: string) => {
-  const isUpgrade = planHierarchy[planId] > planHierarchy[currentPlanId];
-  
-  if (isUpgrade || planId !== 'free') {
-    // Redirect to Stripe Checkout for immediate upgrade
-    const subscription = await stripeService.createSubscription({
-      email: user.email,
-      userId: user.id,
-      planType: planId,
-      isYearly
-    });
-    window.location.href = subscription.url;
-  } else {
-    // Redirect to Stripe Customer Portal for downgrade
-    const portal = await stripeService.createCustomerPortalSession();
-    window.location.href = portal.url;
-  }
-};
-```
-
-### 4.3 Pending Changes Display
-Show when user has scheduled a cancellation:
-- "Your Pro plan will end on [Date]"
-- "Downgrading to Free plan on [Date]"
-- "Manage subscription" button → Customer Portal
+### Step 3: Test & Deploy
+1. **Test monthly→yearly switching** on same tier
+2. **Test yearly→monthly switching** on same tier  
+3. **Verify other button states** still work correctly
 
 ---
 
-## Phase 5: Webhook Enhancements
+## Expected Result
 
-### 5.1 Update stripe-webhook/index.ts
-Add handling for subscription updates with `cancel_at_period_end`:
+**Scenario: User on Pro Monthly**
 
-```typescript
-// New event handler
-case 'customer.subscription.updated':
-  await handleSubscriptionUpdated(event);
-  break;
+| Toggle State | Pro Button | Premium Button | Free Button |
+|-------------|------------|----------------|-------------|
+| Monthly     | "Current Plan" ✅ | "Upgrade" ✅ | "Downgrade" ✅ |
+| Yearly      | "Switch to Yearly" ✅ | "Upgrade" ✅ | "Downgrade" ✅ |
 
-async function handleSubscriptionUpdated(event: any) {
-  const subscription = event.data.object;
-  
-  if (subscription.cancel_at_period_end) {
-    // User scheduled cancellation - update pending fields
-    await updatePendingCancellation(subscription);
-  } else {
-    // User reactivated subscription - clear pending fields  
-    await clearPendingCancellation(subscription);
-  }
-}
-```
+**Scenario: User on Pro Yearly**  
+
+| Toggle State | Pro Button | Premium Button | Free Button |
+|-------------|------------|----------------|-------------|
+| Monthly     | "Switch to Monthly" ✅ | "Upgrade" ✅ | "Downgrade" ✅ |
+| Yearly      | "Current Plan" ✅ | "Upgrade" ✅ | "Downgrade" ✅ |
 
 ---
 
-## WHAT TO DELETE IN SUPABASE:
+## Key Benefits of This Approach
 
-### Functions to Delete:
-```bash
-# These don't exist yet, so nothing to delete
-```
+✅ **Minimal Changes**: Keep existing UI/UX exactly the same  
+✅ **Surgical Fix**: Only modify button logic, not entire component structure  
+✅ **Backward Compatible**: All existing functionality remains  
+✅ **Simple Testing**: Easy to verify the fix works  
 
-### Functions to Keep & Enhance:
-- `create-stripe-subscription` ✅ (minor updates)
-- `create-customer-portal-session` ✅ (already perfect)
-- `stripe-webhook` ✅ (needs enhancements)
+## Risk Assessment: LOW RISK 🟢
+- No UI/UX changes
+- No database schema changes needed
+- Isolated logic changes
+- Easy to rollback if issues
 
----
-
-## Implementation Priority
-
-**Phase 1 ✅ DONE**: Database schema
-**Phase 2 (Next)**: Update stripe-webhook to handle subscription.updated events
-**Phase 3 (Next)**: Update frontend plan change logic  
-**Phase 4**: Add pending changes UI
-**Phase 5**: Testing and polish
-
-**Estimated Timeline**: 1 week instead of 2-3 weeks!
-
----
-
-## Key Benefits of Simplified Approach:
-
-1. **Reuse Existing Code**: No new functions to maintain
-2. **Stripe Customer Portal**: Handles all edge cases automatically
-3. **Standard UX**: Users get familiar Stripe billing interface  
-4. **Less Complexity**: Fewer moving parts = fewer bugs
-5. **Faster Implementation**: Build on what already works
-
----
-
-## User Experience Flow (SIMPLIFIED)
-
-### Upgrade Flow:
-1. Click "Upgrade" → Stripe Checkout (existing flow)
-2. Immediate access to new features
-
-### Downgrade Flow:  
-1. Click "Downgrade" → Stripe Customer Portal
-2. User cancels subscription with "at period end"
-3. Webhook updates our pending fields
-4. UI shows "Plan ends on [Date]"
-5. User keeps access until period end
+## Future Enhancements 🚀
+- **Proration handling** for mid-cycle changes
+- **Usage analytics** and billing insights
+- **Advanced plan features** and add-ons
+- **Enterprise pricing** tiers

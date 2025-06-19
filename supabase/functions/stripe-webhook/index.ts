@@ -115,7 +115,37 @@ async function handleSubscriptionChange(event: any) {
     console.log(`Subscription ${subscription.id} scheduled for cancellation at period end`);
     
     // Calculate effective date (when subscription will actually cancel)
-    const effectiveDate = new Date(subscription.current_period_end * 1000);
+    // The current_period_end is in the subscription items, not the main subscription object
+    const subscriptionItem = subscription.items.data[0];
+    const currentPeriodEnd = subscriptionItem?.current_period_end;
+    
+    console.log('Raw current_period_end value:', currentPeriodEnd);
+    console.log('Type of current_period_end:', typeof currentPeriodEnd);
+    console.log('Subscription item:', subscriptionItem);
+    
+    let effectiveDate;
+    try {
+      // Handle both string and number timestamps
+      const timestamp = typeof currentPeriodEnd === 'string' 
+        ? parseInt(currentPeriodEnd) 
+        : currentPeriodEnd;
+      
+      if (!timestamp) {
+        throw new Error(`current_period_end is missing or invalid: ${currentPeriodEnd}`);
+      }
+      
+      effectiveDate = new Date(timestamp * 1000);
+      
+      if (isNaN(effectiveDate.getTime())) {
+        throw new Error(`Invalid date created from timestamp: ${timestamp}`);
+      }
+      
+      console.log('Effective date calculated:', effectiveDate.toISOString());
+    } catch (error) {
+      console.error('Error converting current_period_end to date:', error);
+      console.error('Full subscription object:', JSON.stringify(subscription, null, 2));
+      return; // Exit early to prevent further errors
+    }
     
     // Update user record with pending downgrade to free
     await supabase
@@ -263,6 +293,12 @@ async function updateUserTable(userId: string, subscription: any, planId: string
     return;
   }
 
+  // Extract billing interval from Stripe subscription
+  const stripeInterval = subscription.items.data[0].price.recurring?.interval;
+  const billingInterval = stripeInterval === 'year' ? 'yearly' : 'monthly';
+  
+  console.log(`Updating user ${userId} with plan ${planId}, billing interval: ${billingInterval}`);
+
   const { error } = await supabase
     .from('users')
     .update({
@@ -270,13 +306,14 @@ async function updateUserTable(userId: string, subscription: any, planId: string
       subscription_status: subscription.status,
       billing_cycle_start: startDate.toISOString().split('T')[0],
       billing_cycle_end: endDate.toISOString().split('T')[0],
+      billing_interval: billingInterval,
       updated_at: new Date().toISOString(),
       subscription_plan_id: planId
     })
     .eq('id', userId);
 
   if (error) console.error('Error updating user table:', error);
-  else console.log(`Updated user ${userId} to plan ${planId} in users table.`);
+  else console.log(`Updated user ${userId} to plan ${planId} (${billingInterval}) in users table.`);
 }
 
 async function updateSubscriptionsTable(userId: string, subscription: any, planId: string) {

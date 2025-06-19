@@ -168,6 +168,31 @@ export class SubscriptionService {
     }
   }
 
+  // Get current user's billing interval
+  async getCurrentBillingInterval(): Promise<string> {
+    try {
+      const { data: { user } } = await this.supabase.auth.getUser()
+      if (!user) return 'monthly'
+
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('billing_interval')
+        .eq('id', user.id)
+        .single()
+
+      if (error) {
+        console.error('Error fetching billing interval:', error)
+        return 'monthly'
+      }
+
+      // Return the billing interval, defaulting to 'monthly' if null
+      return data.billing_interval || 'monthly'
+    } catch (error) {
+      console.error('Error in getCurrentBillingInterval:', error)
+      return 'monthly'
+    }
+  }
+
   // Get user's subscription status and billing info
   async getSubscriptionStatus(): Promise<{
     subscriptionPlanId: string

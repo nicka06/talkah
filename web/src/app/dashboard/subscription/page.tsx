@@ -28,6 +28,7 @@ function SubscriptionContent() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isYearly, setIsYearly] = useState(false)
   const [currentPlanId, setCurrentPlanId] = useState<string>('free')
+  const [currentBillingInterval, setCurrentBillingInterval] = useState<string>('monthly')
 
   // Handle URL parameters (success, canceled, etc.)
   useEffect(() => {
@@ -56,6 +57,11 @@ function SubscriptionContent() {
       const planId = await getCurrentPlanId()
       console.log('Plan ID from getCurrentPlanId():', planId)
       
+      // Also fetch current billing interval
+      const subscriptionService = new (await import('@/services/subscriptionService')).SubscriptionService()
+      const billingInterval = await subscriptionService.getCurrentBillingInterval()
+      console.log('Current billing interval:', billingInterval)
+      
       // Helper function to convert Stripe Price IDs to our plan IDs
       const priceToPlainMap: { [key: string]: string } = {
         'price_1RYAcH04AHhaKcz1zSaXyJHS': 'pro',     // Pro Monthly
@@ -74,18 +80,15 @@ function SubscriptionContent() {
       
       console.log('Raw plan ID:', rawPlanId)
       console.log('Final plan ID being set:', finalPlanId)
-      
-      // DEBUG: Additional debugging
       console.log('DEBUG - Current Plan Detection:', {
-        'subscription?.subscriptionPlanId': subscription?.subscriptionPlanId,
-        'planId from getCurrentPlanId()': planId,
-        'rawPlanId': rawPlanId,
-        'finalPlanId after conversion': finalPlanId,
-        'conversion map': priceToPlainMap,
-        'was conversion applied': rawPlanId !== finalPlanId
+        rawPlanId,
+        finalPlanId,
+        billingInterval,
+        subscriptionObject: subscription
       })
       
       setCurrentPlanId(finalPlanId)
+      setCurrentBillingInterval(billingInterval)
     }
     
     // Only fetch if we have subscription data
@@ -104,6 +107,18 @@ function SubscriptionContent() {
       const planHierarchy = { 'free': 0, 'pro': 1, 'premium': 2 }
       const currentPlanLevel = planHierarchy[currentPlanId as keyof typeof planHierarchy] ?? 0
       const targetPlanLevel = planHierarchy[planId as keyof typeof planHierarchy] ?? 0
+
+      // Check if this is an interval switch (same plan, different billing period)
+      const isIntervalSwitch = planId === currentPlanId && currentBillingInterval !== (isYearly ? 'yearly' : 'monthly')
+      
+      console.log('Plan change analysis:', {
+        planId,
+        currentPlanId,
+        currentBillingInterval,
+        isYearly,
+        isIntervalSwitch,
+        targetInterval: isYearly ? 'yearly' : 'monthly'
+      })
 
       // Handle downgrades to free plan only - use Customer Portal
       if (planId === 'free') {
@@ -127,13 +142,19 @@ function SubscriptionContent() {
         return
       }
 
-      // All other plan changes (upgrades and paid plan switches) - use Stripe Checkout
+      // All other plan changes (upgrades, downgrades, and interval switches) - use Stripe Checkout
       const isUpgrade = targetPlanLevel > currentPlanLevel
-      const actionText = isUpgrade ? 'upgrade' : 'plan change'
+      let actionText = 'plan change'
+      
+      if (isIntervalSwitch) {
+        actionText = `switch to ${isYearly ? 'yearly' : 'monthly'} billing`
+      } else if (isUpgrade) {
+        actionText = 'upgrade'
+      }
       
       showInfo(
         `Redirecting to Checkout`, 
-        `You will be redirected to Stripe to complete your ${actionText}. ${isUpgrade ? 'You\'ll be charged prorated for the remainder of this billing cycle.' : 'Your billing will be adjusted accordingly.'}`
+        `You will be redirected to Stripe to complete your ${actionText}. ${isUpgrade || isIntervalSwitch ? 'You\'ll be charged prorated for the remainder of this billing cycle.' : 'Your billing will be adjusted accordingly.'}`
       )
 
       // Create or update subscription using Stripe Checkout
@@ -258,6 +279,7 @@ function SubscriptionContent() {
             <SubscriptionPlans
               plans={plans}
               currentPlanId={currentPlanId}
+              currentBillingInterval={currentBillingInterval}
               onUpgrade={handlePlanChange}
               isYearly={isYearly}
               onYearlyChange={setIsYearly}
