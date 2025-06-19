@@ -57,13 +57,14 @@ function SubscriptionContent() {
       console.log('Plan ID from getCurrentPlanId():', planId)
       
       // Helper function to convert Stripe Price IDs to our plan IDs
+      const priceToPlainMap: { [key: string]: string } = {
+        'price_1RYAcH04AHhaKcz1zSaXyJHS': 'pro',     // Pro Monthly
+        'price_1RYAcj04AHhaKcz1jZEqaw58': 'pro',     // Pro Annual  
+        'price_1RYAd904AHhaKcz1sfdexopq': 'premium', // Premium Monthly
+        'price_1RYAdU04AHhaKcz1ZXsoCLdh': 'premium'  // Premium Annual
+      }
+      
       const convertPriceIdToPlanId = (id: string): string => {
-        const priceToPlainMap: { [key: string]: string } = {
-          'price_1RYAcH04AHhaKcz1zSaXyJHS': 'pro',     // Pro Monthly
-          'price_1RYAcj04AHhaKcz1jZEqaw58': 'pro',     // Pro Annual  
-          'price_1RYAd904AHhaKcz1sfdexopq': 'premium', // Premium Monthly
-          'price_1RYAdU04AHhaKcz1ZXsoCLdh': 'premium'  // Premium Annual
-        }
         return priceToPlainMap[id] || id // Return converted ID or original if not found
       }
       
@@ -73,6 +74,16 @@ function SubscriptionContent() {
       
       console.log('Raw plan ID:', rawPlanId)
       console.log('Final plan ID being set:', finalPlanId)
+      
+      // DEBUG: Additional debugging
+      console.log('DEBUG - Current Plan Detection:', {
+        'subscription?.subscriptionPlanId': subscription?.subscriptionPlanId,
+        'planId from getCurrentPlanId()': planId,
+        'rawPlanId': rawPlanId,
+        'finalPlanId after conversion': finalPlanId,
+        'conversion map': priceToPlainMap,
+        'was conversion applied': rawPlanId !== finalPlanId
+      })
       
       setCurrentPlanId(finalPlanId)
     }

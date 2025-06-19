@@ -56,9 +56,20 @@ export function SubscriptionPlans({
     const currentPlanLevel = planHierarchy[currentPlanId as keyof typeof planHierarchy] ?? 0
     const thisPlanLevel = planHierarchy[plan.id as keyof typeof planHierarchy] ?? 0
 
+    // DEBUG: Add debugging for button logic
+    console.log(`DEBUG - Plan ${plan.id}:`, {
+      currentPlanId,
+      isCurrentPlan,
+      currentPlanLevel,
+      thisPlanLevel,
+      isProcessing,
+      planHierarchy
+    })
+
     // Determine button state and text
     const getButtonConfig = () => {
       if (isCurrentPlan) {
+        console.log(`DEBUG - ${plan.id}: Current plan - disabling`)
         return {
           text: 'Current Plan',
           disabled: true,
@@ -68,12 +79,14 @@ export function SubscriptionPlans({
 
       if (plan.id === 'free') {
         if (currentPlanId !== 'free') {
+          console.log(`DEBUG - ${plan.id}: Should show downgrade button`)
           return {
             text: 'Downgrade',
             disabled: false,
             className: 'bg-orange-500 text-white hover:bg-orange-600'
           }
         } else {
+          console.log(`DEBUG - ${plan.id}: Current free plan - disabling`)
           return {
             text: 'Free Plan',
             disabled: true,
@@ -83,6 +96,7 @@ export function SubscriptionPlans({
       }
 
       if (thisPlanLevel > currentPlanLevel) {
+        console.log(`DEBUG - ${plan.id}: Should show upgrade button (${thisPlanLevel} > ${currentPlanLevel})`)
         return {
           text: 'Upgrade',
           disabled: isProcessing,
@@ -91,6 +105,7 @@ export function SubscriptionPlans({
             : 'bg-black text-white hover:bg-gray-800'
         }
       } else {
+        console.log(`DEBUG - ${plan.id}: Should show downgrade button (${thisPlanLevel} <= ${currentPlanLevel})`)
         return {
           text: 'Downgrade',
           disabled: isProcessing,
@@ -102,6 +117,7 @@ export function SubscriptionPlans({
     }
 
     const buttonConfig = getButtonConfig()
+    console.log(`DEBUG - ${plan.id} Button Config:`, buttonConfig)
 
     // Define the three core services with their limits
     const getCoreServices = () => {
@@ -186,6 +202,15 @@ export function SubscriptionPlans({
   }
 
   console.log('All plans received:', plans)
+
+  // DEBUG: Overall component state
+  console.log('DEBUG - SubscriptionPlans Component State:', {
+    currentPlanId,
+    isProcessing,
+    isYearly,
+    plansCount: plans.length,
+    planIds: plans.map(p => p.id)
+  })
 
   return (
     <div className={`space-y-6 ${className}`}>
