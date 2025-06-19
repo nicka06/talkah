@@ -13,7 +13,13 @@ import { useToastContext } from '@/contexts/ToastContext'
 export default function CallsPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
-  const { usage, plans, loading: subscriptionLoading, getCurrentPlanId } = useSubscription()
+  const { 
+    subscription, 
+    plans, 
+    loading: subscriptionLoading, 
+    getCurrentPlanId,
+    canPerformAction 
+  } = useSubscription()
   const { showSuccess, showError } = useToastContext()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [topic, setTopic] = useState('')
@@ -119,10 +125,11 @@ export default function CallsPage() {
       setIsProcessing(true)
 
       // Check if user can make a call BEFORE making the API call
-      const phoneCallsRemaining = usage ? (usage.phoneCallsLimit === -1 ? Infinity : usage.phoneCallsLimit - usage.phoneCallsUsed) : 0
-      if (phoneCallsRemaining <= 0) {
+      const canCall = await canPerformAction('phone_call')
+      if (!canCall) {
         // Show subscription popup instead of toast
         setShowSubscriptionPopup(true)
+        setIsProcessing(false) // Stop processing to prevent button from staying disabled
         return
       }
 
@@ -151,9 +158,15 @@ export default function CallsPage() {
       } else {
         showError('Call Failed', 'Failed to initiate call. Please check your inputs and try again.')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initiating call:', error)
-      showError('Call Error', 'Failed to initiate call. Please try again or contact support if the problem persists.')
+      
+      // Check for a specific usage limit error from the backend
+      if (error.context?.error?.usage_limit_reached) {
+        setShowSubscriptionPopup(true)
+      } else {
+        showError('Call Error', 'Failed to initiate call. Please try again or contact support if the problem persists.')
+      }
     } finally {
       setIsProcessing(false)
     }
@@ -191,6 +204,8 @@ export default function CallsPage() {
           <p className="text-lg sm:text-xl text-black/90 mb-6 sm:mb-8 px-2">
             AI-powered conversations with anyone, anywhere
           </p>
+
+
 
           {/* Call Form */}
           <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg border-2 border-black">

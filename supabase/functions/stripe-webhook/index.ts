@@ -110,6 +110,80 @@ async function handleSubscriptionChange(event: any) {
   const planId = getPlanIdFromPriceId(price.id);
   const previousPlanId = user.subscription_tier;
 
+  // Check if subscription is scheduled for cancellation
+  if (subscription.cancel_at_period_end) {
+    console.log(`Subscription ${subscription.id} scheduled for cancellation at period end`);
+    
+    // Calculate effective date (when subscription will actually cancel)
+    const effectiveDate = new Date(subscription.current_period_end * 1000);
+    
+    // Update user record with pending downgrade to free
+    await supabase
+      .from('users')
+      .update({
+        pending_plan_id: 'free',
+        plan_change_effective_date: effectiveDate.toISOString().split('T')[0],
+        plan_change_type: 'downgrade',
+        plan_change_requested_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id);
+
+    // Record in plan_changes table
+    await supabase
+      .from('plan_changes')
+      .insert({
+        user_id: user.id,
+        from_plan_id: planId,
+        to_plan_id: 'free',
+        change_type: 'downgrade',
+        effective_date: effectiveDate.toISOString().split('T')[0],
+        status: 'pending',
+        stripe_subscription_id: subscription.id,
+        notes: 'Scheduled via Stripe Customer Portal cancel_at_period_end'
+      });
+
+    console.log(`Updated pending plan change for user ${user.id}: ${planId} -> free on ${effectiveDate.toDateString()}`);
+  } else {
+    // Subscription is not scheduled for cancellation
+    // Check if user had a pending cancellation that was reactivated
+    const { data: userData } = await supabase
+      .from('users')
+      .select('pending_plan_id, plan_change_type')
+      .eq('id', user.id)
+      .single();
+
+    if (userData?.pending_plan_id && userData?.plan_change_type === 'downgrade') {
+      console.log(`Subscription ${subscription.id} reactivated - clearing pending cancellation`);
+      
+      // Clear pending plan change
+      await supabase
+        .from('users')
+        .update({
+          pending_plan_id: null,
+          plan_change_effective_date: null,
+          plan_change_type: null,
+          plan_change_requested_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      // Mark pending plan changes as cancelled
+      await supabase
+        .from('plan_changes')
+        .update({
+          status: 'cancelled',
+          notes: 'Cancelled - subscription reactivated before effective date',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id)
+        .eq('status', 'pending');
+
+      console.log(`Cleared pending plan change for user ${user.id} - subscription reactivated`);
+    }
+  }
+
+  // Continue with normal subscription update processing
   await updateUserTable(user.id, subscription, planId);
   await updateSubscriptionsTable(user.id, subscription, planId);
   await updateUsageTracking(user.id, subscription, planId);
@@ -197,7 +271,7 @@ async function updateUserTable(userId: string, subscription: any, planId: string
       billing_cycle_start: startDate.toISOString().split('T')[0],
       billing_cycle_end: endDate.toISOString().split('T')[0],
       updated_at: new Date().toISOString(),
-      subscription_plan_id: subscription.items.data[0].price.id
+      subscription_plan_id: planId
     })
     .eq('id', userId);
 

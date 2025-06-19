@@ -355,10 +355,6 @@ verify_jwt = true
 enabled = true
 verify_jwt = false
 
-[functions.twilio-voice-connect-stream]
-enabled = true
-verify_jwt = false
-
 [functions.twilio-status-callback]
 enabled = true
 verify_jwt = false

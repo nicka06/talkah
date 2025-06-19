@@ -1,42 +1,65 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// @ts-nocheck
+// @ts-ignore: Deno types
+declare const Deno: any;
+
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import Twilio from 'https://esm.sh/twilio?target=deno'
+
+const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID")!;
+const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
+
+const corsHeaders = { 
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" 
+};
 
 // This function receives the AMD result from Twilio and writes it to the database
-serve(async (req) => {
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   const supabaseClient = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   )
 
   try {
-    const params = new URL(req.url).searchParams;
-    const callSid = params.get('CallSid');
-    const answeredBy = params.get('AnsweredBy');
+    const formData = await req.formData();
+    const callSid = formData.get("CallSid") as string;
+    const answeredBy = formData.get("AnsweredBy") as string;
 
-    if (!callSid || !answeredBy) {
-      console.error('Missing CallSid or AnsweredBy in request');
-      return new Response('Missing required parameters', { status: 400 });
+    console.log(`AMD Callback received for ${callSid}. AnsweredBy: ${answeredBy}`);
+
+    // We only care about machine detections. Humans are handled by the IVR prompt.
+    if (answeredBy && (answeredBy === 'machine_start' || answeredBy === 'fax')) {
+      console.log(`Machine detected for ${callSid}. Redirecting call to say goodbye.`);
+
+      const twilioClient = new Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>It looks like you couldn't connect with talkah, try again another time.</Say>
+  <Hangup/>
+</Response>`;
+
+      // Use the Twilio API to redirect the live call to the new TwiML
+      await twilioClient.calls(callSid).update({ twiml: twiml });
+      
+      console.log(`Call ${callSid} redirected to hangup TwiML.`);
+    } else {
+      console.log(`No machine detected for ${callSid} (${answeredBy}). No action taken.`);
     }
 
-    console.log(`Received AMD result for CallSid: ${callSid}. AnsweredBy: ${answeredBy}`);
-
-    const { error } = await supabaseClient
-      .from('amd_waiting_room')
-      .insert({ 
-        call_sid: callSid, 
-        answered_by: answeredBy 
-      });
-
-    if (error) {
-      console.error('Error inserting AMD result into database:', error);
-      throw error;
-    }
-    
-    console.log(`Successfully inserted AMD result for ${callSid}`);
-    return new Response("AMD result stored.", { status: 200 });
+    // Respond to Twilio's webhook request
+    return new Response("OK", { headers: { "Content-Type": "text/plain" } });
 
   } catch (error) {
-    console.error('Error in amd-callback function:', error.message);
-    return new Response(`Internal Server Error: ${error.message}`, { status: 500 });
+    console.error("Error in amd-callback function:", error.message, error.stack);
+    return new Response("Internal Server Error", { 
+      status: 500, 
+      headers: { "Content-Type": "text/plain" } 
+    });
   }
 }) 

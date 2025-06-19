@@ -22,6 +22,7 @@ function SubscriptionContent() {
     loading: subscriptionLoading,
     error,
     getCurrentPlanId,
+    pendingPlanChange,
     refresh
   } = useSubscription()
   const [isProcessing, setIsProcessing] = useState(false)
@@ -49,27 +50,82 @@ function SubscriptionContent() {
   // Get current plan ID when component mounts
   useEffect(() => {
     const fetchCurrentPlan = async () => {
+      console.log('Subscription object:', subscription)
+      console.log('Subscription plan ID from subscription object:', subscription?.subscriptionPlanId)
+      
       const planId = await getCurrentPlanId()
-      setCurrentPlanId(planId || 'free')
+      console.log('Plan ID from getCurrentPlanId():', planId)
+      
+      // Helper function to convert Stripe Price IDs to our plan IDs
+      const convertPriceIdToPlanId = (id: string): string => {
+        const priceToPlainMap: { [key: string]: string } = {
+          'price_1RYAcH04AHhaKcz1zSaXyJHS': 'pro',     // Pro Monthly
+          'price_1RYAcj04AHhaKcz1jZEqaw58': 'pro',     // Pro Annual  
+          'price_1RYAd904AHhaKcz1sfdexopq': 'premium', // Premium Monthly
+          'price_1RYAdU04AHhaKcz1ZXsoCLdh': 'premium'  // Premium Annual
+        }
+        return priceToPlainMap[id] || id // Return converted ID or original if not found
+      }
+      
+      // Use subscription.subscriptionPlanId if available, otherwise use getCurrentPlanId()
+      const rawPlanId = subscription?.subscriptionPlanId || planId || 'free'
+      const finalPlanId = convertPriceIdToPlanId(rawPlanId)
+      
+      console.log('Raw plan ID:', rawPlanId)
+      console.log('Final plan ID being set:', finalPlanId)
+      
+      setCurrentPlanId(finalPlanId)
     }
-    fetchCurrentPlan()
-  }, [getCurrentPlanId])
+    
+    // Only fetch if we have subscription data
+    if (subscription) {
+      fetchCurrentPlan()
+    }
+  }, [getCurrentPlanId, subscription])
 
-  const handleUpgrade = async (planId: string) => {
+  const handlePlanChange = async (planId: string) => {
     if (isProcessing || !user) return
 
     try {
       setIsProcessing(true)
 
-      // Validate plan type
+      // Define plan hierarchy for comparison
+      const planHierarchy = { 'free': 0, 'pro': 1, 'premium': 2 }
+      const currentPlanLevel = planHierarchy[currentPlanId as keyof typeof planHierarchy] ?? 0
+      const targetPlanLevel = planHierarchy[planId as keyof typeof planHierarchy] ?? 0
+
+      // Handle downgrades to free plan only - use Customer Portal
       if (planId === 'free') {
-        showError('Invalid Plan', 'Cannot upgrade from the free plan')
+        if (currentPlanId === 'free') {
+          showError('Invalid Action', 'You are already on the free plan')
+          return
+        }
+
+        // For downgrades to free, redirect to Stripe Customer Portal
+        showInfo(
+          'Redirecting to Billing Portal', 
+          'You will be redirected to manage your subscription. You can cancel your subscription and it will remain active until the end of your billing period.'
+        )
+        
+        const portalData = await new StripeService().createCustomerPortalSession()
+        if (!portalData.url) {
+          throw new Error('No Customer Portal URL returned')
+        }
+        
+        window.location.href = portalData.url
         return
       }
 
-      showInfo('Redirecting to Checkout', 'You will be redirected to Stripe to complete your payment.')
+      // All other plan changes (upgrades and paid plan switches) - use Stripe Checkout
+      const isUpgrade = targetPlanLevel > currentPlanLevel
+      const actionText = isUpgrade ? 'upgrade' : 'plan change'
+      
+      showInfo(
+        `Redirecting to Checkout`, 
+        `You will be redirected to Stripe to complete your ${actionText}. ${isUpgrade ? 'You\'ll be charged prorated for the remainder of this billing cycle.' : 'Your billing will be adjusted accordingly.'}`
+      )
 
-      // Create subscription (platform: 'web' is sent by default)
+      // Create or update subscription using Stripe Checkout
       const subscriptionData = await new StripeService().createSubscription({
         email: user.email!,
         userId: user.id,
@@ -77,7 +133,7 @@ function SubscriptionContent() {
         isYearly
       })
 
-      // Get the Stripe Checkout URL from the subscription data
+      // Get the Stripe Checkout URL
       const url = subscriptionData.url
       if (!url) {
         throw new Error('No Stripe Checkout URL returned')
@@ -85,9 +141,10 @@ function SubscriptionContent() {
       
       // Redirect to Stripe Checkout
       window.location.href = url
+      
     } catch (error) {
-      console.error('Error upgrading subscription:', error)
-      showError('Upgrade Failed', 'Failed to upgrade subscription. Please try again or contact support.')
+      console.error('Error changing subscription:', error)
+      showError('Plan Change Failed', 'Failed to change subscription. Please try again or contact support.')
     } finally {
       setIsProcessing(false)
     }
@@ -151,13 +208,46 @@ function SubscriptionContent() {
             <UsageDisplay usage={subscription} />
           </div>
 
+          {/* Pending Plan Changes */}
+          {pendingPlanChange && (
+            <div className="mb-12">
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-6 max-w-2xl mx-auto">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-orange-800 mb-2">
+                    {pendingPlanChange.changeType === 'downgrade' ? 'Subscription Ending' : 'Plan Change Scheduled'}
+                  </h3>
+                  <p className="text-orange-700 mb-4">
+                    {pendingPlanChange.changeType === 'downgrade' && pendingPlanChange.targetPlanId === 'free'
+                      ? `Your subscription will end on ${pendingPlanChange.effectiveDate.toLocaleDateString()}. You'll continue to have access to your current plan features until then.`
+                      : `Your plan will change to ${pendingPlanChange.targetPlanId} on ${pendingPlanChange.effectiveDate.toLocaleDateString()}.`
+                    }
+                  </p>
+                  <button
+                    onClick={async () => {
+                      const portalData = await new StripeService().createCustomerPortalSession()
+                      if (portalData.url) window.location.href = portalData.url
+                    }}
+                    className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    Manage Subscription
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Subscription Plans */}
           <div>
             <h2 className="text-2xl font-bold mb-6 font-graffiti text-black">Available Plans</h2>
             <SubscriptionPlans
               plans={plans}
               currentPlanId={currentPlanId}
-              onUpgrade={handleUpgrade}
+              onUpgrade={handlePlanChange}
               isYearly={isYearly}
               onYearlyChange={setIsYearly}
               isProcessing={isProcessing}

@@ -12,6 +12,13 @@ export interface UsageTracking {
   billingPeriodEnd: Date
 }
 
+export interface PendingPlanChange {
+  targetPlanId: string
+  effectiveDate: Date
+  changeType: 'upgrade' | 'downgrade' | 'cancel'
+  requestedAt: Date
+}
+
 export interface SubscriptionPlan {
   id: string
   name: string
@@ -48,7 +55,6 @@ export class SubscriptionService {
       const { data, error } = await this.supabase
         .from('subscription_plans')
         .select()
-        .eq('is_active', true)
         .order('sort_order', { ascending: true })
 
       if (error) throw error
@@ -191,6 +197,37 @@ export class SubscriptionService {
       }
     } catch (error) {
       console.error('Error fetching subscription status:', error)
+      return null
+    }
+  }
+
+  // Get pending plan change for current user
+  async getPendingPlanChange(): Promise<PendingPlanChange | null> {
+    try {
+      const { data: { user } } = await this.supabase.auth.getUser()
+      if (!user) return null
+
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('pending_plan_id, plan_change_effective_date, plan_change_type, plan_change_requested_at')
+        .eq('id', user.id)
+        .single()
+
+      if (error) throw error
+
+      // Return null if no pending change
+      if (!data.pending_plan_id || !data.plan_change_effective_date) {
+        return null
+      }
+
+      return {
+        targetPlanId: data.pending_plan_id,
+        effectiveDate: new Date(data.plan_change_effective_date),
+        changeType: data.plan_change_type as 'upgrade' | 'downgrade' | 'cancel',
+        requestedAt: new Date(data.plan_change_requested_at)
+      }
+    } catch (error) {
+      console.error('Error fetching pending plan change:', error)
       return null
     }
   }

@@ -115,4 +115,19 @@ export class StripeService {
       return false
     }
   }
+
+  // Create Stripe Customer Portal session for subscription management
+  async createCustomerPortalSession() {
+    try {
+      const { data, error } = await this.supabase.functions.invoke(
+        'create-customer-portal-session'
+      )
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error creating customer portal session:', error)
+      throw error
+    }
+  }
 } 

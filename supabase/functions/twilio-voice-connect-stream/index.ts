@@ -7,100 +7,90 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Environment variables that will need to be set in Supabase Dashboard
+// Environment variables
 // @ts-ignore
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 // @ts-ignore
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // @ts-ignore
-const EXTERNAL_WEBSOCKET_SERVICE_URL = Deno.env.get("EXTERNAL_WEBSOCKET_SERVICE_URL")!; // e.g., wss://your-websocket-app.fly.dev
+const EXTERNAL_WEBSOCKET_SERVICE_URL = Deno.env.get("EXTERNAL_WEBSOCKET_SERVICE_URL")!;
+// @ts-ignore
+const FUNCTIONS_BASE_URL = Deno.env.get("FUNCTIONS_BASE_URL")!;
+
+const corsHeaders = { 
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" 
+};
 
 serve(async (req: Request) => {
   console.log("twilio-voice-connect-stream function invoked.");
 
-  // 1. Handle CORS (though less critical for Twilio webhooks, good practice)
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: { 
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" 
-    }});
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // 2. Extract CallSid from the request
-    const url = new URL(req.url);
-    let callSid = url.searchParams.get("CallSid");
-
-    if (!callSid && req.method === "POST") {
-        try {
-            const formData = await req.formData();
-            callSid = formData.get("CallSid") as string | null;
-        } catch (e) {
-            console.warn("Could not parse form data, or not a form data request:", e.message);
-        }
-    }
-    
-    if (!callSid) {
-      console.error("CallSid not found in request.");
-      return new Response(JSON.stringify({ error: "CallSid is required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    console.log(`Received CallSid: ${callSid}`);
-
-    // 3. Initialize Supabase client
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const formData = await req.formData();
+    const callSid = formData.get("CallSid") as string;
+    const digits = formData.get("Digits") as string | null;
 
-    // 4. Fetch the topic for this call from the 'calls' table
-    const { data: callData, error: fetchError } = await supabaseAdmin
-      .from("calls")
-      .select("topic")
-      .eq("twilio_call_sid", callSid)
-      .single();
+    console.log(`Request received for CallSid: ${callSid}, Digits: ${digits}`);
 
-    if (fetchError || !callData) {
-      console.error("Error fetching call details or call not found:", fetchError?.message);
-      const hangupTwiML = `<?xml version="1.0" encoding="UTF-8"?>
+    if (!digits) {
+      // First leg of the call, play the prompt and gather input
+      console.log(`No digits pressed for ${callSid}. Playing welcome message and gathering input.`);
+      const gatherTwiML = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>An error occurred, please try again later.</Say>
+  <Gather input="dtmf" timeout="5" numDigits="1" action="${FUNCTIONS_BASE_URL}twilio-voice-connect-stream" method="POST">
+    <Say>Hello. To speak with our AI assistant, Talkah, please press 1.</Say>
+  </Gather>
+  <Say>It looks like you couldn't connect with talkah, try again another time.</Say>
   <Hangup/>
 </Response>`;
-      return new Response(hangupTwiML, { headers: { "Content-Type": "application/xml" } });
-    }
-    const topic = callData.topic;
-    console.log(`Topic for call ${callSid}: ${topic}`);
-
-    // 5. Update the call record: status to 'answered', set answered_time
-    const { error: updateError } = await supabaseAdmin
-      .from("calls")
-      .update({ status: "answered", answered_time: new Date().toISOString() })
-      .eq("twilio_call_sid", callSid);
-
-    if (updateError) {
-      console.error("Error updating call status to answered:", updateError.message);
-    } else {
-      console.log(`Call ${callSid} status updated to answered.`);
+      return new Response(gatherTwiML, { headers: { "Content-Type": "application/xml" } });
     }
 
-    // 6. Construct TwiML with <Connect><Stream>
-    const streamBaseUrl = EXTERNAL_WEBSOCKET_SERVICE_URL;
-    const encodedTopic = encodeURIComponent(topic);
-    
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+    if (digits === '1') {
+      // User pressed 1, connect them to the WebSocket stream
+      console.log(`User pressed 1 for ${callSid}. Connecting to WebSocket.`);
+
+      const { data: callData, error: fetchError } = await supabaseAdmin
+        .from("calls")
+        .select("topic")
+        .eq("twilio_call_sid", callSid)
+        .single();
+
+      if (fetchError || !callData) {
+        console.error("Error fetching call details or call not found:", fetchError?.message);
+        throw new Error("Call record not found");
+      }
+      
+      const topic = callData.topic;
+      const encodedTopic = encodeURIComponent(topic);
+      
+      const connectTwiML = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="${streamBaseUrl}">
+    <Stream url="${EXTERNAL_WEBSOCKET_SERVICE_URL}">
       <Parameter name="callSid" value="${callSid}"/>
       <Parameter name="topic" value="${encodedTopic}"/>
     </Stream>
   </Connect>
 </Response>`;
+      console.log(`Responding with TwiML to connect ${callSid}: ${connectTwiML}`);
+      return new Response(connectTwiML, { headers: { "Content-Type": "application/xml" } });
 
-    console.log(`Responding with TwiML: ${twiml}`);
-
-    // 7. Return TwiML response
-    return new Response(twiml, { headers: { "Content-Type": "application/xml" } });
+    } else {
+      // User pressed something other than 1
+      console.log(`User pressed '${digits}' for ${callSid}. Hanging up.`);
+      const hangupTwiML = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>You have pressed an invalid key. Goodbye.</Say>
+  <Hangup/>
+</Response>`;
+      return new Response(hangupTwiML, { headers: { "Content-Type": "application/xml" } });
+    }
 
   } catch (error) {
     console.error("Error in twilio-voice-connect-stream function:", error.message, error.stack);

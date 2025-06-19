@@ -13,7 +13,13 @@ import { useToastContext } from '@/contexts/ToastContext'
 export default function EmailsPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
-  const { usage, plans, loading: subscriptionLoading, getCurrentPlanId } = useSubscription()
+  const { 
+    subscription, 
+    plans, 
+    loading: subscriptionLoading, 
+    getCurrentPlanId,
+    canPerformAction
+  } = useSubscription()
   const { showSuccess, showError } = useToastContext()
   const [recipientEmail, setRecipientEmail] = useState('')
   const [subject, setSubject] = useState('')
@@ -66,10 +72,11 @@ export default function EmailsPage() {
       setIsProcessing(true)
 
       // Check if user can send an email BEFORE making the API call
-      const emailsRemaining = usage ? (usage.emailsLimit === -1 ? Infinity : usage.emailsLimit - usage.emailsUsed) : 0
-      if (emailsRemaining <= 0) {
+      const canEmail = await canPerformAction('email')
+      if (!canEmail) {
         // Show subscription popup instead of error
         setShowSubscriptionPopup(true)
+        setIsProcessing(false) // Stop processing to prevent button from staying disabled
         return
       }
 
@@ -139,6 +146,12 @@ export default function EmailsPage() {
           <p className="text-xl text-black/90 mb-8">
             AI-powered professional emails generated instantly
           </p>
+
+          {subscription && (
+            <div className="mb-6 text-lg text-black/80">
+              Emails Used: {subscription.emailsUsed} / {subscription.emailsLimit === -1 ? 'Unlimited' : subscription.emailsLimit}
+            </div>
+          )}
 
           {/* Email Form */}
           <div className="bg-white/10 backdrop-blur-sm p-8 rounded-xl shadow-lg border-2 border-black">

@@ -51,6 +51,58 @@ export function SubscriptionPlans({
       fullPlan: plan
     })
 
+    // Define plan hierarchy for comparison
+    const planHierarchy = { 'free': 0, 'pro': 1, 'premium': 2 }
+    const currentPlanLevel = planHierarchy[currentPlanId as keyof typeof planHierarchy] ?? 0
+    const thisPlanLevel = planHierarchy[plan.id as keyof typeof planHierarchy] ?? 0
+
+    // Determine button state and text
+    const getButtonConfig = () => {
+      if (isCurrentPlan) {
+        return {
+          text: 'Current Plan',
+          disabled: true,
+          className: 'bg-gray-100 text-gray-400 cursor-not-allowed'
+        }
+      }
+
+      if (plan.id === 'free') {
+        if (currentPlanId !== 'free') {
+          return {
+            text: 'Downgrade',
+            disabled: false,
+            className: 'bg-orange-500 text-white hover:bg-orange-600'
+          }
+        } else {
+          return {
+            text: 'Free Plan',
+            disabled: true,
+            className: 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          }
+        }
+      }
+
+      if (thisPlanLevel > currentPlanLevel) {
+        return {
+          text: 'Upgrade',
+          disabled: isProcessing,
+          className: isProcessing 
+            ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+            : 'bg-black text-white hover:bg-gray-800'
+        }
+      } else {
+        return {
+          text: 'Downgrade',
+          disabled: isProcessing,
+          className: isProcessing 
+            ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+            : 'bg-orange-500 text-white hover:bg-orange-600'
+        }
+      }
+    }
+
+    const buttonConfig = getButtonConfig()
+
     // Define the three core services with their limits
     const getCoreServices = () => {
       // Add fallback values in case limits are still undefined
@@ -74,7 +126,7 @@ export function SubscriptionPlans({
     return (
       <div className={`
         relative bg-white border-2 border-black rounded-xl p-6
-        ${isCurrentPlan ? 'ring-2 ring-black' : ''}
+        ${isCurrentPlan ? 'ring-2 ring-black bg-gray-50' : ''}
       `}>
         {isCurrentPlan && (
           <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-1 rounded-full text-sm">
@@ -84,14 +136,22 @@ export function SubscriptionPlans({
 
         <div className="space-y-4">
           <div>
-            <h3 className="text-xl font-bold">{plan.name}</h3>
-            <p className="text-gray-600">{plan.description}</p>
+            <h3 className={`text-xl font-bold ${isCurrentPlan ? 'text-gray-700' : ''}`}>
+              {plan.name}
+            </h3>
+            <p className={`${isCurrentPlan ? 'text-gray-500' : 'text-gray-600'}`}>
+              {plan.description}
+            </p>
           </div>
 
           <div className="space-y-2">
             <div className="flex items-baseline">
-              <span className="text-3xl font-bold">{formatPrice(price)}</span>
-              <span className="text-gray-600 ml-2">/{isYearly ? 'year' : 'month'}</span>
+              <span className={`text-3xl font-bold ${isCurrentPlan ? 'text-gray-700' : ''}`}>
+                {formatPrice(price)}
+              </span>
+              <span className={`ml-2 ${isCurrentPlan ? 'text-gray-500' : 'text-gray-600'}`}>
+                /{isYearly ? 'year' : 'month'}
+              </span>
             </div>
             {isYearly && savings > 0 && !isNaN(savings) && (
               <p className="text-sm text-green-600">
@@ -106,25 +166,19 @@ export function SubscriptionPlans({
                 <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span className="text-sm">{service}</span>
+                <span className={`text-sm ${isCurrentPlan ? 'text-gray-600' : ''}`}>
+                  {service}
+                </span>
               </div>
             ))}
           </div>
 
           <button
-            onClick={() => onUpgrade(plan.id)}
-            disabled={isCurrentPlan || isProcessing || plan.id === 'free'}
-            className={`
-              w-full py-2 px-4 rounded-lg font-medium
-              ${isCurrentPlan || isProcessing || plan.id === 'free'
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-black text-white hover:bg-gray-800'
-              }
-            `}
+            onClick={() => !buttonConfig.disabled && onUpgrade(plan.id)}
+            disabled={buttonConfig.disabled}
+            className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${buttonConfig.className}`}
           >
-            {isCurrentPlan ? 'Current Plan' : 
-             plan.id === 'free' ? 'Free Plan' :
-             isProcessing ? 'Processing...' : 'Upgrade'}
+            {isProcessing && !buttonConfig.disabled ? 'Processing...' : buttonConfig.text}
           </button>
         </div>
       </div>

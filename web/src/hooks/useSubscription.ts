@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { SubscriptionService, UsageTracking, SubscriptionPlan } from '@/services/subscriptionService'
+import { SubscriptionService, UsageTracking, SubscriptionPlan, PendingPlanChange } from '@/services/subscriptionService'
 
 export interface SubscriptionData extends UsageTracking {
   subscriptionPlanId: string | null;
@@ -10,6 +10,7 @@ export interface SubscriptionData extends UsageTracking {
 export function useSubscription() {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
+  const [pendingPlanChange, setPendingPlanChange] = useState<PendingPlanChange | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const subscriptionService = new SubscriptionService()
@@ -17,10 +18,11 @@ export function useSubscription() {
   const loadSubscriptionData = useCallback(async () => {
     try {
       setLoading(true);
-      const [usageData, plansData, statusData] = await Promise.all([
+      const [usageData, plansData, statusData, pendingChangeData] = await Promise.all([
         subscriptionService.getCurrentUsage(),
         subscriptionService.getSubscriptionPlans(),
         subscriptionService.getSubscriptionStatus(),
+        subscriptionService.getPendingPlanChange(),
       ]);
       
       if (usageData && statusData) {
@@ -50,6 +52,7 @@ export function useSubscription() {
       }
 
       setPlans(plansData);
+      setPendingPlanChange(pendingChangeData);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load subscription data'));
     } finally {
@@ -88,14 +91,25 @@ export function useSubscription() {
     }
   }
 
+  const getPendingPlanChange = async (): Promise<PendingPlanChange | null> => {
+    try {
+      return await subscriptionService.getPendingPlanChange()
+    } catch (err) {
+      console.error('Error getting pending plan change:', err)
+      return null
+    }
+  }
+
   return {
     subscription,
     plans,
+    pendingPlanChange,
     loading,
     error,
     canPerformAction,
     getCurrentPlanId,
     getSubscriptionStatus,
+    getPendingPlanChange,
     refresh: loadSubscriptionData
   }
 } 

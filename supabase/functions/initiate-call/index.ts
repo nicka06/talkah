@@ -30,6 +30,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // Or for local dev with `supabase start`, usually `http://localhost:54321/functions/v1/`
 // @ts-ignore
 const FUNCTIONS_BASE_URL = Deno.env.get("FUNCTIONS_BASE_URL")!;
+const WEBSOCKET_SERVER_URL = Deno.env.get("EXTERNAL_WEBSOCKET_SERVICE_URL")!;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,21 +83,34 @@ serve(async (req: Request) => {
     }
 
     // 4. Check usage limits before making call
-    // @ts-ignore
-    const { data: usageData } = await supabase
+    const { data: usageData, error: rpcError } = await supabase
       .rpc('get_current_month_usage', { user_uuid: user.id });
+
+    if (rpcError) {
+      console.error('Error fetching user usage:', rpcError);
+      throw new Error('Could not verify user usage.');
+    }
     
-    // @ts-ignore
-    const usage = usageData[0] || { calls_used: 0, texts_used: 0, emails_used: 0, tier: 'free' };
+    const usage = usageData[0] || { calls_used: 0, tier: 'Free' };
+    const userTier = usage.tier || 'Free';
+
+    // Initialize Supabase admin client for service operations
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Fetch the plan details from the database to get the real limit
+    const { data: planData, error: planError } = await supabaseAdmin
+        .from('subscription_plans')
+        .select('phone_calls_limit')
+        .eq('name', userTier)
+        .single();
     
-    const limits = {
-      free: { calls: 1 },
-      pro: { calls: 5 },
-      premium: { calls: -1 }
-    };
+    if (planError) {
+        console.error(`Could not find plan details for tier: ${userTier}`, planError);
+        throw new Error(`Invalid subscription tier: ${userTier}`);
+    }
+
+    const tierLimit = planData.phone_calls_limit;
     
-    // @ts-ignore
-    const tierLimit = limits[usage.tier as keyof typeof limits]?.calls || 1;
     if (tierLimit !== -1 && usage.calls_used >= tierLimit) {
       return new Response(JSON.stringify({ 
         error: 'Phone call limit reached',
@@ -107,36 +121,32 @@ serve(async (req: Request) => {
       });
     }
 
-    // 5. Initialize Supabase admin client for service operations
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // 6. Initialize Twilio client
+    // 5. Initialize Twilio client
     const twilioClient = new Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
-    // 7. Construct TwiML webhook URL
-    // This URL will point to your 'twilio-voice-connect-stream' Edge Function
-    // It needs to be publicly accessible by Twilio.
-    const twimlWebhookUrl = `${FUNCTIONS_BASE_URL}twilio-voice-connect-stream`;
+    // 6. Construct TwiML webhook URL
+    // This URL will now point to our always-on websocket server on Fly.io
+    const twimlWebhookUrl = WEBSOCKET_SERVER_URL.replace('wss://', 'https://').replace('ws://', 'http://') + '/twilio-voice';
     const amdWebhookUrl = `${FUNCTIONS_BASE_URL}amd-callback`;
 
-    // 8. Make the outbound call using Twilio
+    // 7. Make the outbound call using Twilio
     const call = await twilioClient.calls.create({
       to: user_phone_number,
       from: YOUR_TWILIO_PHONE_NUMBER,
-      url: twimlWebhookUrl, // Twilio will GET this URL when the call connects
-      method: "GET", // Method Twilio will use to request the TwiML URL
+      url: twimlWebhookUrl, // Twilio will POST to this URL when the call connects
+      method: "POST",
       statusCallback: `${FUNCTIONS_BASE_URL}twilio-status-callback`, // For call status updates
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed', 'failed'],
-      // Add Answering Machine Detection (AMD) parameters
-      machineDetection: 'Enable', // Enable AMD
-      asyncAmd: true, // Use async AMD to avoid delaying call connection
-      asyncAmdStatusCallback: amdWebhookUrl, // Webhook to send AMD result
-      asyncAmdStatusCallbackMethod: 'GET' // Use GET to match amd-callback function
+      // Add Asynchronous Answering Machine Detection (AMD)
+      machineDetection: 'Enable',
+      asyncAmd: true,
+      asyncAmdStatusCallback: amdWebhookUrl,
+      asyncAmdStatusCallbackMethod: 'POST'
     });
 
     console.log(`Twilio call initiated. SID: ${call.sid}`);
 
-    // 9. Store initial call details in Supabase with user_id
+    // 8. Store initial call details in Supabase with user_id
     // @ts-ignore
     const { data: callRecord, error: dbError } = await supabaseAdmin
       .from("calls")
@@ -162,7 +172,7 @@ serve(async (req: Request) => {
 
     console.log("Call record stored in Supabase:", callRecord);
 
-    // 10. Return success response
+    // 9. Return success response
     return new Response(
       JSON.stringify({ success: true, message: "Call initiated successfully!", twilio_call_sid: call.sid, call_record_id: callRecord.id }),
       { headers: { "Content-Type": "application/json", ...corsHeaders } },
