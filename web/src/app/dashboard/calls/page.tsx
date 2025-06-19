@@ -252,8 +252,6 @@ export default function CallsPage() {
         onClose={() => setShowSubscriptionPopup(false)}
         plans={plans}
         currentPlanId={currentPlanId}
-        userEmail={user?.email || ''}
-        userId={user?.id || ''}
       />
     </div>
   )

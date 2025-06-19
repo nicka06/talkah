@@ -17,7 +17,7 @@ function SubscriptionContent() {
   const { user, loading: authLoading } = useAuth()
   const { showSuccess, showError, showInfo } = useToastContext()
   const { 
-    usage, 
+    subscription, 
     plans, 
     loading: subscriptionLoading,
     error,
@@ -30,15 +30,14 @@ function SubscriptionContent() {
 
   // Handle URL parameters (success, canceled, etc.)
   useEffect(() => {
-    const success = searchParams.get('success')
-    
-    if (success === 'true') {
+    if (searchParams.get('success') === 'true') {
       showSuccess('Subscription Updated!', 'Your subscription has been successfully updated.')
       // Clean up the URL and refresh subscription data
-      router.replace('/dashboard/subscription')
+      router.replace('/dashboard/subscription', { scroll: false })
       refresh()
     }
-  }, [searchParams, router, showSuccess, refresh])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run only once on mount
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -123,7 +122,7 @@ function SubscriptionContent() {
     )
   }
 
-  if (!usage || !plans.length) {
+  if (!subscription || !plans.length) {
     return null
   }
 
@@ -149,7 +148,7 @@ function SubscriptionContent() {
 
           {/* Usage Display */}
           <div className="mb-12">
-            <UsageDisplay usage={usage} />
+            <UsageDisplay usage={subscription} />
           </div>
 
           {/* Subscription Plans */}

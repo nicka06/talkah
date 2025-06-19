@@ -4,9 +4,11 @@ const { createClient } = require('@supabase/supabase-js');
 const { SpeechClient } = require('@google-cloud/speech');
 const OpenAI = require('openai');
 const axios = require('axios');
-const crypto =require('crypto');
+const crypto = require('crypto');
+const querystring = require('querystring');
 
 const PORT = process.env.PORT || 8080;
+const WEBSOCKET_URL = process.env.EXTERNAL_WEBSOCKET_SERVICE_URL || `ws://localhost:${PORT}`;
 
 // --- API Client Initialization ---
 
@@ -114,7 +116,6 @@ function forceEndCall(connectionId, reason = "Call duration limit reached") {
 
     console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Force ending call. Reason: ${reason}`);
     
-    // Use a generic goodbye that doesn't rely on TTS, in case that's part of the issue
     if (connectionData.socket && connectionData.socket.readyState === WebSocket.OPEN) {
         connectionData.socket.close(1000, reason);
     }
@@ -229,15 +230,13 @@ async function handleTTS(connectionId, textToSpeak) {
     }
 }
 
-/**
- * Starts the AI conversation by sending the initial system prompt and user message.
- * @param {string} connectionId - The unique ID for the WebSocket connection.
- */
 function startConversation(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
-  
-  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Human detected (or AMD timed out). Starting conversation.`);
+
+  console.log(
+    `(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Starting conversation.`
+  );
   setupCallTimer(connectionId);
 
   const decodedTopic = decodeURIComponent(connectionData.topic);
@@ -249,171 +248,262 @@ function startConversation(connectionId) {
 5.  **Your Topic:** The central theme of our conversation is "${decodedTopic}". Weave this topic into the conversation naturally, don't just state facts about it.`;
   
   sendToOpenAI(connectionId, systemPrompt, "system");
-  sendToOpenAI(connectionId, `Hello! Let's talk about ${decodedTopic}.`, "user");
-}
 
-/**
- * Sends a message to the OpenAI API for processing.
- * This is a placeholder for where you'd integrate with your LLM.
- * @param {string} connectionId - The unique ID for the WebSocket connection.
- * @param {string} message - The message to send.
- * @param {string} role - The role of the sender ('system' or 'user').
- */
-function sendToOpenAI(connectionId, message, role) {
-    const connectionData = activeConnections.get(connectionId);
-    if (!connectionData) return;
-
-    // In a real implementation, you would add the message to the conversation
-    // history and then call handleLLM. For this placeholder, we'll just log it.
-    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Pretending to send to OpenAI [${role}]: "${message}"`);
-    
-    // If the role is 'user', it implies we need a response from the assistant.
-    if (role === 'user') {
-        handleLLM(connectionId, message);
-    } else if (role === 'system') {
-        // Just add system messages to history without triggering a response
-        connectionData.conversationHistory.push({ role: "system", content: message });
-    }
-}
-
-/**
- * Polls the database waiting for the AMD result for a given call.
- * @param {string} connectionId - The unique ID for the WebSocket connection.
- * @param {string} callSid - The Twilio Call SID to look for.
- */
-async function pollForAmdResult(connectionId, callSid) {
-  const maxAttempts = 10;
-  const interval = 1000;
-
-  for (let i = 0; i < maxAttempts; i++) {
-    const { data: amdRecord, error } = await supabase
-      .from('amd_waiting_room')
-      .select('*')
-      .eq('call_sid', callSid)
-      .single();
-
-    if (amdRecord) {
-      console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Found AMD result in DB: ${amdRecord.answered_by}. Processing now.`);
-      handleAmdDetection(connectionId, amdRecord.answered_by);
-      supabase.from('amd_waiting_room').delete().eq('call_sid', callSid); // Fire and forget cleanup
-      return;
-    }
-
-    if (error && error.code !== 'PGRST116') {
-      console.error(`(ID: ${connectionId}, CallSID: ${callSid}) Error checking AMD waiting room:`, error);
-      forceEndCall(connectionId, 'Error checking AMD status.');
-      return;
-    }
-    await new Promise(resolve => setTimeout(resolve, interval));
-  }
-
-  console.log(`(ID: ${connectionId}, CallSID: ${callSid}) AMD result not found after ${maxAttempts} attempts. Proceeding as human.`);
-  startConversation(connectionId);
-}
-
-// --- WebSocket Server ---
-
-const server = http.createServer((req, res) => {
-    if (req.url === '/health' && req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('OK');
-    } else {
-        res.writeHead(404);
-        res.end();
-    }
-});
-
-const wss = new WebSocket.Server({ server });
-
-wss.on('connection', (ws, req) => {
-  const connectionId = crypto.randomUUID();
-  console.log(`(ID: ${connectionId}) WebSocket connection opened.`);
-  let recognizeStream = null;
-
-  activeConnections.set(connectionId, {
-    socket: ws,
-    callSid: null,
-    streamSid: null,
-    topic: 'default topic',
-    conversationHistory: [],
-    shouldWrapUp: false,
-    shouldFinishNow: false,
-    activeTTS: new Set(),
-  });
-
-  ws.on('message', (data) => {
-    const message = JSON.parse(data);
-    switch (message.event) {
-      case "start":
-        const { callSid, customParameters, streamSid } = message.start;
-        const connectionData = activeConnections.get(connectionId);
-        if(connectionData) {
-            connectionData.callSid = callSid;
-            connectionData.streamSid = streamSid;
-            connectionData.topic = customParameters.topic || 'general conversation';
-            console.log(`(ID: ${connectionId}) Twilio media stream started. CallSid: ${callSid}, StreamSid: ${streamSid}, Topic: ${connectionData.topic}`);
-        }
-        
-        if (speechClient) {
-          try {
-            recognizeStream = speechClient.streamingRecognize({
-              config: { encoding: 'MULAW', sampleRateHertz: 8000, languageCode: 'en-US' },
-              interimResults: false,
-            })
-            .on('error', (error) => console.error(`(ID: ${connectionId}) STT Stream Error:`, error))
-            .on('data', (data) => {
-              const transcript = data.results[0]?.alternatives[0]?.transcript || '';
-              if (transcript) {
-                console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
-                stopAllTTS(connectionId);
-                handleLLM(connectionId, transcript);
-              }
-            });
-            console.log(`(ID: ${connectionId}) STT stream initialized successfully.`);
-          } catch (error) {
-            console.error(`(ID: ${connectionId}) FAILED to initialize STT stream:`, error);
-            forceEndCall(connectionId, "STT initialization failed.");
-            return; // Stop further processing for this connection
-          }
-        }
-        
-        pollForAmdResult(connectionId, callSid);
-        break;
-
-      case "media":
-        if (recognizeStream) recognizeStream.write(message.media.payload);
-        break;
-
-      case "stop":
-        console.log(`(ID: ${connectionId}) Twilio media stream stopped.`);
-        cleanup();
-        break;
-    }
-  });
-
-  const cleanup = () => {
-    console.log(`(ID: ${connectionId}) Cleaning up connection resources.`);
-    clearCallTimers(connectionId);
-    if (recognizeStream) recognizeStream.destroy();
-    activeConnections.delete(connectionId);
-  };
+  const firstUserMessage = `Hello! Let's talk about ${decodedTopic}.`;
   
-  ws.on('close', () => cleanup());
-  ws.on('error', () => cleanup());
-});
+  console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Pretending to send to OpenAI [user]: "${firstUserMessage}"`);
+  handleLLM(connectionId, firstUserMessage);
+}
 
-function handleAmdDetection(connectionId, answeredBy) {
+function sendToOpenAI(connectionId, message, role) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
 
-  if (answeredBy && (answeredBy === 'machine_start' || answeredBy === 'fax')) {
-    console.log(`(ID: ${connectionId}, CallSID: ${connectionData.callSid}) Machine/Fax detected ('${answeredBy}'). Ending call.`);
-    forceEndCall(connectionId, "Voicemail or fax detected");
+  if (role === 'user') {
+    handleLLM(connectionId, message);
   } else {
-    startConversation(connectionId);
+    connectionData.conversationHistory.push({ role: "system", content: message });
   }
 }
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server is listening on 0.0.0.0:${PORT}`);
+// --- TwiML Generation ---
+
+function getGatherTwiML(serverUrl) {
+    const actionUrl = new URL('/twilio-voice', serverUrl.replace('ws://', 'http://').replace('wss://', 'https://')).href;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="dtmf" timeout="5" numDigits="1" action="${actionUrl}" method="POST">
+    <Say>Hello. To speak with our AI assistant, Talkah, please press 1.</Say>
+  </Gather>
+  <Say>We did not receive any input. Goodbye.</Say>
+  <Hangup/>
+</Response>`;
+}
+
+function getConnectTwiML(callSid, topic) {
+  const encodedTopic = encodeURIComponent(topic);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="${WEBSOCKET_URL}">
+      <Parameter name="callSid" value="${callSid}"/>
+      <Parameter name="topic" value="${encodedTopic}"/>
+    </Stream>
+  </Connect>
+</Response>`;
+}
+
+function getHangupTwiML(message) {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>${message}</Say>
+  <Hangup/>
+</Response>`;
+}
+
+// --- HTTP & WebSocket Server ---
+
+const server = http.createServer(async (req, res) => {
+  const { url, method } = req;
+  const requestUrl = new URL(url, `http://${req.headers.host}`);
+
+  if (requestUrl.pathname === '/health' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+  } else if (requestUrl.pathname === '/twilio-voice' && method === 'POST') {
+     try {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            const params = querystring.parse(body);
+            const callSid = params.CallSid;
+            const digits = params.Digits;
+
+            console.log(`HTTP: Request received for CallSid: ${callSid}, Digits: ${digits}`);
+
+            if (!digits) {
+                console.log(`HTTP: No digits for ${callSid}. Playing welcome message.`);
+                res.writeHead(200, { 'Content-Type': 'application/xml' });
+                res.end(getGatherTwiML(WEBSOCKET_URL));
+            } else if (digits === '1') {
+                console.log(`HTTP: User pressed 1 for ${callSid}. Connecting to WebSocket.`);
+                const { data, error } = await supabase
+                    .from('calls')
+                    .select('topic')
+                    .eq('twilio_call_sid', callSid)
+                    .single();
+                
+                if (error || !data) {
+                    console.error(`HTTP: Error fetching topic for ${callSid}:`, error);
+                    res.writeHead(200, { 'Content-Type': 'application/xml' });
+                    res.end(getHangupTwiML('An error occurred. Please try again later.'));
+                } else {
+                    res.writeHead(200, { 'Content-Type': 'application/xml' });
+                    res.end(getConnectTwiML(callSid, data.topic));
+                }
+            } else {
+                console.log(`HTTP: User pressed invalid digits '${digits}' for ${callSid}.`);
+                res.writeHead(200, { 'Content-Type': 'application/xml' });
+                res.end(getHangupTwiML('You have pressed an invalid key. Goodbye.'));
+            }
+        });
+    } catch (error) {
+        console.error('HTTP: Error in /twilio-voice handler:', error);
+        res.writeHead(500, { 'Content-Type': 'application/xml' });
+        res.end(getHangupTwiML('An internal server error occurred.'));
+    }
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+const wss = new WebSocket.Server({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url, `http://${request.headers.host}`);
+    
+    // Only handle WebSocket upgrade requests for the root path
+    if (pathname === '/') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+        });
+    } else {
+        // For other paths, you can choose to destroy the socket or handle them differently
+        socket.destroy();
+    }
+});
+
+wss.on('connection', (socket, req) => {
+  const connectionId = crypto.randomUUID();
+  console.log(`(ID: ${connectionId}) WebSocket connection opened.`);
+  
+  const connectionData = {
+    socket,
+    callSid: null,
+    streamSid: null,
+    topic: 'general conversation',
+    conversationHistory: [],
+    activeTTS: new Set(),
+    isFirstPacket: true,
+    recognizeStream: null,
+    interruptTTS: null,
+    shouldWrapUp: false,
+    shouldFinishNow: false,
+    softWarningTimeout: null,
+    urgentWarningTimeout: null,
+    hardCutoffTimeout: null,
+  };
+  activeConnections.set(connectionId, connectionData);
+
+  let recognizeStream = null;
+
+  socket.on('message', (message) => {
+    const msg = JSON.parse(message);
+
+    switch (msg.event) {
+      case 'connected': {
+        const { protocol, version } = msg;
+        console.log(`(ID: ${connectionId}) Twilio media stream connected. Protocol: ${protocol}, Version: ${version}`);
+        break;
+      }
+      case 'start': {
+        const { start } = msg;
+        const { callSid, streamSid, customParameters } = start;
+        
+        if (connectionData) {
+          connectionData.callSid = callSid;
+          connectionData.streamSid = streamSid;
+          connectionData.topic = 
+            (customParameters && customParameters.topic) || "general conversation";
+          console.log(
+            `(ID: ${connectionId}) Twilio media stream started. CallSid: ${callSid}, StreamSid: ${streamSid}, Topic: ${connectionData.topic}`
+          );
+          startConversation(connectionId);
+        }
+
+        if (speechClient) {
+          try {
+            recognizeStream = speechClient
+              .streamingRecognize({
+                config: {
+                  encoding: 'MULAW',
+                  sampleRateHertz: 8000,
+                  languageCode: 'en-US',
+                  model: 'telephony',
+                  enableAutomaticPunctuation: true,
+                },
+                interimResults: false,
+              })
+              .on('error', (error) => {
+                  console.error(`(ID: ${connectionId}, CallSID: ${callSid}) STT Error:`, error);
+                  if(error.code === 11) {
+                     console.error(`(ID: ${connectionId}) STT stream timed out. Closing connection.`);
+                      forceEndCall(connectionId, "STT idle timeout");
+                  }
+              })
+              .on('data', (data) => {
+                if (data.results && data.results[0] && data.results[0].alternatives[0]) {
+                  const transcript = data.results[0].alternatives[0].transcript.trim();
+                  console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
+                  stopAllTTS(connectionId);
+                  sendToOpenAI(connectionId, transcript, 'user');
+                }
+              });
+
+            console.log(`(ID: ${connectionId}) STT stream initialized successfully.`);
+            connectionData.recognizeStream = recognizeStream;
+          } catch(err) {
+            console.error(`(ID: ${connectionId}) Failed to create STT stream:`, err);
+            forceEndCall(connectionId, "STT initialization failed");
+          }
+        } else {
+            console.error(`(ID: ${connectionId}) speechClient is not initialized. STT will not work.`);
+        }
+        break;
+      }
+      case 'media': {
+        if (recognizeStream) {
+          recognizeStream.write(msg.media.payload);
+        }
+        break;
+      }
+      case 'stop': {
+        console.log(`(ID: ${connectionId}) Twilio media stream stopped.`);
+        const cleanup = () => {
+          console.log(`(ID: ${connectionId}) Cleaning up connection resources.`);
+          clearCallTimers(connectionId);
+          if (recognizeStream) {
+              recognizeStream.destroy();
+          }
+          activeConnections.delete(connectionId);
+        };
+        setTimeout(cleanup, 500);
+        break;
+      }
+    }
+  });
+
+  socket.on('close', (code, reason) => {
+    console.log(`(ID: ${connectionId}) WebSocket connection closed. Code: ${code}, Reason: ${reason}`);
+    const cleanup = () => {
+      console.log(`(ID: ${connectionId}) Cleaning up connection resources.`);
+      clearCallTimers(connectionId);
+      if (recognizeStream) {
+          recognizeStream.destroy();
+      }
+      activeConnections.delete(connectionId);
+    };
+    setTimeout(cleanup, 500);
+  });
+
+  socket.on('error', (error) => {
+    console.error(`(ID: ${connectionId}) WebSocket error:`, error);
+  });
+});
+
+server.listen(PORT, () => {
+    console.log(`🚀 Server is listening on port ${PORT}`);
 });

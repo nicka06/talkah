@@ -62,6 +62,7 @@ serve(async (req) => {
         'line_items[0][quantity]': '1',
         'success_url': 'https://talkah.com/dashboard/subscription?success=true',
         'cancel_url': 'https://talkah.com/dashboard/subscription',
+        'allow_promotion_codes': 'true' 
       })
       const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
         method: 'POST',
@@ -123,42 +124,62 @@ serve(async (req) => {
 
 async function getOrCreateCustomer(email: string, userId: string): Promise<string> {
   // Check if user already has a Stripe customer ID
-  const { data: user } = await supabase
+  const { data: user, error: userError } = await supabase
     .from('users')
     .select('stripe_customer_id')
     .eq('id', userId)
     .single()
 
+  if (userError) throw userError;
+
   if (user?.stripe_customer_id) {
     return user.stripe_customer_id
   }
 
-  // Create new Stripe customer using fetch
+  // Create a new Stripe customer or retrieve an existing one by email
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')
-  const params = new URLSearchParams({
-    email,
-    [`metadata[supabase_user_id]`]: userId,
-  })
-  const response = await fetch('https://api.stripe.com/v1/customers', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${stripeSecret}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params,
-  })
-  const customer = await response.json()
-  if (!customer.id) {
-    throw new Error(customer.error?.message || 'Failed to create Stripe customer')
+  
+  // First, check if a customer with this email already exists in Stripe
+  const searchResponse = await fetch(`https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=1`, {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${stripeSecret}` },
+  });
+  const searchResult = await searchResponse.json();
+  
+  let customerId;
+  if (searchResult.data && searchResult.data.length > 0) {
+    // Use existing customer
+    customerId = searchResult.data[0].id;
+  } else {
+    // Create new Stripe customer
+    const params = new URLSearchParams({
+      email,
+      [`metadata[supabase_user_id]`]: userId,
+    });
+    const createResponse = await fetch('https://api.stripe.com/v1/customers', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${stripeSecret}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params,
+    });
+    const newCustomer = await createResponse.json();
+    if (!newCustomer.id) {
+      throw new Error(newCustomer.error?.message || 'Failed to create Stripe customer');
+    }
+    customerId = newCustomer.id;
   }
 
-  // Update user record with Stripe customer ID
-  await supabase
+  // Update user record with the Stripe customer ID
+  const { error: updateError } = await supabase
     .from('users')
-    .update({ stripe_customer_id: customer.id })
+    .update({ stripe_customer_id: customerId })
     .eq('id', userId)
 
-  return customer.id
+  if (updateError) throw updateError;
+
+  return customerId;
 }
 
 function getPriceId(planType: string, isYearly: boolean): string {

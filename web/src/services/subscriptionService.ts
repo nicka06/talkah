@@ -76,47 +76,47 @@ export class SubscriptionService {
     }
   }
 
-  // Get current user's usage and limits
+  // Get current user's usage and limits for the current billing period
   async getCurrentUsage(): Promise<UsageTracking | null> {
     try {
       const { data: { user } } = await this.supabase.auth.getUser()
       if (!user) return null
 
+      // Fetch the most recent usage record for the user
       const { data, error } = await this.supabase
-        .rpc('get_current_month_usage', { user_uuid: user.id })
+        .from('usage_tracking')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('billing_period_start', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (error) throw error
-      if (!data || data.length === 0) return null
-
-      const usageData = data[0]
-      const tier = usageData.tier || 'free'
-
-      const limits = {
-        free: { calls: 1, texts: 1, emails: 1 },
-        pro: { calls: 5, texts: 10, emails: -1 },
-        premium: { calls: -1, texts: -1, emails: -1 }
+      if (error) {
+        // If no record is found, it's not a critical error.
+        // It could just mean the user is new.
+        if (error.code === 'PGRST116') {
+          console.warn('No usage tracking record found for user:', user.id);
+          return null;
+        }
+        throw error;
       }
 
-      const tierLimits = limits[tier as keyof typeof limits] || limits.free
-
-      const now = new Date()
-      const billingStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      const billingEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      if (!data) return null;
 
       return {
         userId: user.id,
-        phoneCallsUsed: usageData.calls_used || 0,
-        textChainsUsed: usageData.texts_used || 0,
-        emailsUsed: usageData.emails_used || 0,
-        phoneCallsLimit: tierLimits.calls,
-        textChainsLimit: tierLimits.texts,
-        emailsLimit: tierLimits.emails,
-        billingPeriodStart: billingStart,
-        billingPeriodEnd: billingEnd
-      }
+        phoneCallsUsed: data.calls_used ?? 0,
+        textChainsUsed: data.texts_used ?? 0,
+        emailsUsed: data.emails_used ?? 0,
+        phoneCallsLimit: data.phone_calls_limit ?? 0,
+        textChainsLimit: data.text_chains_limit ?? 0,
+        emailsLimit: data.emails_limit ?? 0,
+        billingPeriodStart: new Date(data.billing_period_start),
+        billingPeriodEnd: new Date(data.billing_period_end)
+      };
     } catch (error) {
-      console.error('Error fetching usage:', error)
-      return null
+      console.error('Error fetching usage:', error);
+      return null;
     }
   }
 

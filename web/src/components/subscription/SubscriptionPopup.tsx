@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 import { SubscriptionPlan } from '@/services/subscriptionService'
 import { StripeService } from '@/services/stripeService'
 
@@ -7,18 +9,16 @@ interface SubscriptionPopupProps {
   onClose: () => void
   plans: SubscriptionPlan[]
   currentPlanId: string
-  userEmail: string
-  userId: string
 }
 
 export function SubscriptionPopup({ 
   isOpen, 
   onClose, 
   plans, 
-  currentPlanId, 
-  userEmail, 
-  userId 
+  currentPlanId
 }: SubscriptionPopupProps) {
+  const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null)
   const [isYearly, setIsYearly] = useState(false)
@@ -37,7 +37,7 @@ export function SubscriptionPopup({
   }
 
   const handleUpgrade = async (planId: string) => {
-    if (isProcessing || planId === 'free' || planId === currentPlanId) return
+    if (isProcessing || planId === 'free' || planId === currentPlanId || !user) return
 
     try {
       setIsProcessing(true)
@@ -45,8 +45,8 @@ export function SubscriptionPopup({
 
       // Create subscription with selected billing period
       const subscriptionData = await new StripeService().createSubscription({
-        email: userEmail,
-        userId: userId,
+        email: user.email!,
+        userId: user.id,
         planType: planId,
         isYearly: isYearly
       })
@@ -66,6 +66,10 @@ export function SubscriptionPopup({
       setIsProcessing(false)
       setProcessingPlanId(null)
     }
+  }
+
+  const handleSignIn = () => {
+    router.push('/auth/login')
   }
 
   // Filter out free plan and current plan
@@ -147,17 +151,22 @@ export function SubscriptionPopup({
                 </div>
 
                 <button
-                  onClick={() => handleUpgrade(plan.id)}
-                  disabled={isProcessing}
+                  onClick={() => user ? handleUpgrade(plan.id) : handleSignIn()}
+                  disabled={isProcessing || authLoading}
                   className={`
                     w-full py-2 px-4 rounded-lg font-medium transition-colors
                     ${isProcessing && processingPlanId === plan.id
                       ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-black text-white hover:bg-gray-800'
+                      : user ? 'bg-black text-white hover:bg-gray-800' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }
                   `}
                 >
-                  {isProcessing && processingPlanId === plan.id ? 'Processing...' : 'Upgrade Now'}
+                  {authLoading 
+                    ? 'Loading...' 
+                    : user 
+                      ? (isProcessing && processingPlanId === plan.id ? 'Processing...' : 'Upgrade Now')
+                      : 'Sign In to Upgrade'
+                  }
                 </button>
               </div>
             )
