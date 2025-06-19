@@ -435,7 +435,7 @@ wss.on('connection', (socket, req) => {
                   model: 'telephony',
                   enableAutomaticPunctuation: true,
                 },
-                interimResults: false,
+                interimResults: true,
               })
               .on('error', (error) => {
                   console.error(`(ID: ${connectionId}, CallSID: ${callSid}) STT Error:`, error);
@@ -447,9 +447,16 @@ wss.on('connection', (socket, req) => {
               .on('data', (data) => {
                 if (data.results && data.results[0] && data.results[0].alternatives[0]) {
                   const transcript = data.results[0].alternatives[0].transcript.trim();
-                  console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
-                  stopAllTTS(connectionId);
-                  sendToOpenAI(connectionId, transcript, 'user');
+                  const isFinal = data.results[0].isFinal;
+                  
+                  if (isFinal) {
+                    console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
+                    sendToOpenAI(connectionId, transcript, 'user');
+                  } else if (transcript.length > 0) {
+                    // Interim result - stop TTS immediately but don't send to OpenAI yet
+                    console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Interim speech detected, stopping TTS: "${transcript}"`);
+                    stopAllTTS(connectionId);
+                  }
                 }
               });
 
