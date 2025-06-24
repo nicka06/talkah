@@ -1,2 +1,6 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
+
+// Google OAuth Configuration
+GOOGLE_CLIENT_ID = 482125218738-qkms0vgcurekhl1u38bmjk252not8cnf.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.482125218738-qkms0vgcurekhl1u38bmjk252not8cnf
