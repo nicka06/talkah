@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.app_for_talking"
+    namespace = "com.talkah.app_for_talking"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
