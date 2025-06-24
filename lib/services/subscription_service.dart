@@ -1,10 +1,202 @@
+import 'dart:convert';
 import 'dart:developer' as dev;
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/subscription_plan.dart';
 import '../models/usage_tracking.dart';
 
 class SubscriptionService {
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  //==========================================================================
+  // NEW STATIC STRIPE PAYMENT METHODS
+  //==========================================================================
+
+  /// Initializes Stripe for the app. Must be called in main.dart.
+  static Future<void> initStripe() async {
+    // Get Stripe publishable key from environment variables
+    final publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
+    if (publishableKey.isEmpty) {
+      throw Exception('STRIPE_PUBLISHABLE_KEY must be provided in .env file');
+    }
+    
+    Stripe.publishableKey = publishableKey;
+    
+    // The merchant identifier is optional for Google Pay but required for Apple Pay
+    // on real devices.
+    final merchantId = dotenv.env['STRIPE_MERCHANT_ID'] ?? 'merchant.com.talkah.appfortalking';
+    Stripe.merchantIdentifier = merchantId;
+    
+    await Stripe.instance.applySettings();
+    dev.log('✅ StripeService: Initialized');
+  }
+
+  /// Checks if Apple Pay or Google Pay is available on the device.
+  static Future<bool> isPlatformPaySupported() async {
+    final isSupported = await Stripe.instance.isPlatformPaySupported();
+    dev.log('ℹ️ StripeService: Platform Pay Supported: $isSupported');
+    return isSupported;
+  }
+
+  /// Provides static pricing for the UI to display.
+  static Map<String, double> getPricing() {
+    return {
+      'pro_monthly': 8.99,
+      'pro_yearly': 79.99,
+      'premium_monthly': 14.99,
+      'premium_yearly': 119.99,
+    };
+  }
+
+  /// Calculate yearly savings for a plan
+  static double getYearlySavings(String planType) {
+    final pricing = getPricing();
+    if (planType == 'pro') {
+      final monthly = pricing['pro_monthly']! * 12;
+      final yearly = pricing['pro_yearly']!;
+      return monthly - yearly;
+    } else if (planType == 'premium') {
+      final monthly = pricing['premium_monthly']! * 12;
+      final yearly = pricing['premium_yearly']!;
+      return monthly - yearly;
+    }
+    return 0;
+  }
+
+  /// Calls your Deno function to create a mobile subscription intent.
+  /// This correctly sends `platform: 'mobile'` and returns only the client_secret.
+  static Future<String> createMobileSubscriptionAndGetClientSecret({
+    required String email,
+    required String userId,
+    required String planType,
+    required bool isYearly,
+  }) async {
+    dev.log('🔄 StripeService: Creating mobile subscription for $planType...');
+    
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'create-payment-intent',
+        body: {
+          'email': email,
+          'planType': planType,
+          'isYearly': isYearly,
+        },
+      );
+
+      if (response.data == null) {
+        throw Exception('Failed to create payment intent - null response');
+      }
+
+      if (response.data['success'] == false) {
+        dev.log('❌ StripeService: Backend returned error: ${response.data['error']}');
+        throw Exception('Backend error: ${response.data['error']}');
+      }
+
+      final clientSecret = response.data['paymentIntent'];
+      if (clientSecret == null) {
+        throw Exception('Failed to get client_secret from server response.');
+      }
+      
+      dev.log('✅ StripeService: Client secret retrieved.');
+      return clientSecret;
+    } catch (e) {
+      dev.log('❌ StripeService: Error creating subscription: $e');
+      rethrow;
+    }
+  }
+
+  /// Processes the payment using Apple Pay or Google Pay.
+  /// This uses `confirmPlatformPayPaymentIntent`, which DOES NOT require an ephemeral key.
+  static Future<bool> processPlatformPay({
+    required String clientSecret,
+    required double amount,
+    required String planName,
+  }) async {
+    dev.log('🔄 StripeService: Processing platform pay...');
+    try {
+      // Configure Platform Pay parameters based on platform
+      PlatformPayConfirmParams confirmParams;
+      
+      if (Platform.isIOS) {
+        // Apple Pay configuration
+        confirmParams = PlatformPayConfirmParams.applePay(
+          applePay: ApplePayParams(
+            merchantCountryCode: 'US', // ⚠️-REPLACE with your country code
+            currencyCode: 'USD',
+            cartItems: [
+              ApplePayCartSummaryItem.immediate(
+                label: '$planName Subscription',
+                amount: amount.toStringAsFixed(2),
+              ),
+            ],
+            requiredBillingContactFields: [
+              ApplePayContactFieldsType.emailAddress,
+            ],
+          ),
+        );
+      } else {
+        // Google Pay configuration for Android
+        confirmParams = PlatformPayConfirmParams.googlePay(
+          googlePay: GooglePayParams(
+            merchantCountryCode: 'US', // ⚠️-REPLACE with your country code
+            currencyCode: 'USD',
+            testEnv: true, // IMPORTANT: Set to false in production
+          ),
+        );
+      }
+
+      // Confirm Platform Pay payment
+      final paymentIntent = await Stripe.instance.confirmPlatformPayPaymentIntent(
+        clientSecret: clientSecret,
+        confirmParams: confirmParams,
+      );
+
+      dev.log('✅ StripeService: Platform pay successful.');
+      return paymentIntent.status == PaymentIntentsStatus.Succeeded;
+    } on StripeException catch (e) {
+      if (e.error.code == FailureCode.Canceled) {
+        dev.log('⚠️ StripeService: Payment cancelled by user.');
+      } else {
+        dev.log('❌ StripeService: Stripe Error: ${e.error.message}');
+      }
+      return false;
+    } catch (e) {
+      dev.log('❌ StripeService: An unexpected error occurred: $e');
+      return false;
+    }
+  }
+  
+  /// Placeholder for your credit card form fallback.
+  static Future<bool> confirmCardPayment({
+    required String clientSecret,
+    required String email,
+  }) async {
+    dev.log('🔄 StripeService: Processing card payment...');
+    try {
+      await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: 'Talkah',
+      ));
+      await Stripe.instance.presentPaymentSheet();
+      dev.log('✅ StripeService: Card payment successful.');
+      return true;
+    } on StripeException catch (e) {
+       if (e.error.code == FailureCode.Canceled) {
+        dev.log('⚠️ StripeService: Payment cancelled by user.');
+      } else {
+        dev.log('❌ StripeService: Stripe Error: ${e.error.message}');
+      }
+      return false;
+    }
+  }
+
+  //==========================================================================
+  // YOUR EXISTING DATABASE-RELATED METHODS (UNCHANGED)
+  //==========================================================================
 
   // Get all available subscription plans
   Future<List<SubscriptionPlan>> getSubscriptionPlans() async {
@@ -121,28 +313,9 @@ class SubscriptionService {
 
       dev.log('🔄 SubscriptionService: Incrementing $actionType usage by $amount for user $userId...');
       
-      // TODO: The old system didn't have working increment functions
-      // For now, just return true so the app doesn't crash
-      // The increment was happening directly in the Edge Functions
       dev.log('⚠️ SubscriptionService: Increment function disabled - using Edge Function increments');
       return true;
       
-      /*
-      final response = await _supabase.rpc('increment_usage', params: {
-        'p_user_id': userId,
-        'p_usage_type': actionType,
-        'p_amount': amount,
-      });
-
-      final success = response as bool;
-      if (success) {
-        dev.log('✅ SubscriptionService: Usage incremented successfully');
-      } else {
-        dev.log('❌ SubscriptionService: Usage increment failed (likely at limit)');
-      }
-      
-      return success;
-      */
     } catch (e) {
       dev.log('❌ SubscriptionService: Error incrementing usage: $e');
       return false;

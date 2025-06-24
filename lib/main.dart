@@ -3,8 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'config/supabase_config.dart';
-import 'services/stripe_payment_service.dart';
+import 'services/subscription_service.dart';
 import 'blocs/auth/auth_bloc.dart';
 import 'blocs/auth/auth_event.dart';
 import 'blocs/auth/auth_state.dart';
@@ -33,6 +34,9 @@ class DebugBlocObserver extends BlocObserver {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+  
   // Lock orientation to portrait mode only
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -46,8 +50,8 @@ void main() async {
   // Initialize Supabase
   await SupabaseConfig.initialize();
   
-  // Initialize Stripe
-  await StripePaymentService.init();
+  // Initialize Stripe using the new service
+  await SubscriptionService.initStripe();
   
   runApp(const MyApp());
 }

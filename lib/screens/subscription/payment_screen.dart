@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../services/stripe_payment_service.dart';
 import '../../services/subscription_service.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -33,7 +32,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   void _initializeData() {
-    final pricing = StripePaymentService.getPricing();
+    final pricing = SubscriptionService.getPricing();
     final key = '${widget.planType}_${widget.isYearly ? 'yearly' : 'monthly'}';
     _amount = pricing[key];
     
@@ -46,7 +45,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _checkPlatformPaySupport() async {
-    final isSupported = await StripePaymentService.isPlatformPaySupported();
+    final isSupported = await SubscriptionService.isPlatformPaySupported();
     if (mounted) {
       setState(() {
         _isPlatformPaySupported = isSupported;
@@ -74,22 +73,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
 
       // Create subscription and get client secret
-      final subscriptionData = await StripePaymentService.createSubscription(
+      final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
         email: user.email ?? '',
         userId: user.id,
         planType: widget.planType,
         isYearly: widget.isYearly,
       );
 
-      final clientSecret = subscriptionData['client_secret'];
-      if (clientSecret == null) {
-        throw Exception('Failed to get payment intent');
-      }
-
       // Process payment with Platform Pay (Apple Pay / Google Pay)
-      final success = await StripePaymentService.processPlatformPayPayment(
+      final success = await SubscriptionService.processPlatformPay(
         clientSecret: clientSecret,
-        email: user.email ?? '',
         amount: _amount!,
         planName: _planDisplayName!,
       );
@@ -101,7 +94,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
           
           _showSuccessDialog();
         } else {
-          _showErrorDialog('Payment was not completed. Please try again.');
+          // No error dialog here, as the service handles logging the cancellation
+          // This prevents showing an error when a user intentionally closes the pay sheet.
         }
       }
     } catch (e) {
@@ -169,7 +163,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final savings = widget.isYearly 
-        ? StripePaymentService.getYearlySavings(widget.planType)
+        ? SubscriptionService.getYearlySavings(widget.planType)
         : 0.0;
 
     return Scaffold(

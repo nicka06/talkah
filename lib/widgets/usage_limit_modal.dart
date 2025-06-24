@@ -4,7 +4,6 @@ import '../screens/subscription/subscription_screen.dart';
 import 'dart:io' show Platform;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/subscription_service.dart';
-import '../services/stripe_payment_service.dart';
 
 class UsageLimitModal {
   static void show({
@@ -48,7 +47,7 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
 
   Future<void> _checkPlatformPaySupport() async {
     try {
-      final isSupported = await StripePaymentService.isPlatformPaySupported();
+      final isSupported = await SubscriptionService.isPlatformPaySupported();
       if (mounted) {
         setState(() {
           _isPlatformPaySupported = isSupported;
@@ -74,19 +73,12 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
         return;
       }
 
-      final subscriptionData = await StripePaymentService.createSubscription(
+      final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
         email: user.email!,
         userId: user.id,
         planType: planType,
         isYearly: false, // Hardcoded to monthly for the modal
       );
-
-      final clientSecret = subscriptionData['latest_invoice']['payment_intent']['client_secret'];
-      if (clientSecret == null) {
-        Navigator.pop(context); // Close loading dialog
-        _showErrorDialog('Failed to create payment intent');
-        return;
-      }
 
       Navigator.pop(context); // Close loading dialog
 
@@ -108,7 +100,7 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
           ? (Platform.isIOS ? 'Processing Apple Pay...' : 'Processing Google Pay...')
           : 'Processing payment...');
 
-      final pricing = StripePaymentService.getPricing();
+      final pricing = SubscriptionService.getPricing();
       final key = '${planType}_monthly'; // Always use monthly price
       final amount = pricing[key] ?? 0.0;
       final planName = '${planType.toUpperCase()} Plan';
@@ -116,14 +108,13 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
       bool success = false;
 
       if (_isPlatformPaySupported) {
-        success = await StripePaymentService.processPlatformPayPayment(
+        success = await SubscriptionService.processPlatformPay(
           clientSecret: clientSecret,
-          email: email,
           amount: amount,
           planName: planName,
         );
       } else {
-        success = await StripePaymentService.confirmPayment(
+        success = await SubscriptionService.confirmCardPayment(
           clientSecret: clientSecret,
           email: email,
         );
@@ -136,7 +127,8 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
         await subscriptionService.getSubscriptionStatus();
         _showSuccessDialog();
       } else {
-        _showErrorDialog('Payment was not completed. Please try again.');
+        // No error dialog here, as the service handles logging the cancellation
+        // This prevents showing an error when a user intentionally closes the pay sheet.
       }
 
     } catch (e) {

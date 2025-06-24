@@ -1,23 +1,43 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class StripePaymentService {
-  // Only publishable key is safe to use in client-side code
-  static const String _publishableKey = 'pk_test_51RY9qA04AHhaKcz1q2v3nQQVXzM3UqSDZNZKUy0u4SfbpBSJO6Kct5AQeNnZZKEKsaEWTjAWC0MG3BwvCK9m3dFN00lAJwkgN9'; // Your actual publishable key
-  static const String _merchantId = 'merchant.com.yourcompany.appfortalking'; // Replace with your actual merchant ID
+  // Get publishable key from environment variables
+  static String get _publishableKey => dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
+  static String get _merchantId => dotenv.env['STRIPE_MERCHANT_ID'] ?? 'merchant.com.talkah.appfortalking';
 
   static Future<void> init() async {
+    debugPrint('🚀 STRIPE INIT: Initializing Stripe...');
+    
+    if (_publishableKey.isEmpty) {
+      throw Exception('STRIPE_PUBLISHABLE_KEY must be provided in .env file');
+    }
+    
+    debugPrint('🔑 STRIPE INIT: Publishable Key: ${_publishableKey.substring(0, 20)}...');
+    debugPrint('🏪 STRIPE INIT: Merchant ID: $_merchantId');
+    
     Stripe.publishableKey = _publishableKey;
     
     // Configure Apple Pay if on iOS
     if (Platform.isIOS) {
+      debugPrint('🍎 STRIPE INIT: Configuring Apple Pay for iOS');
       Stripe.merchantIdentifier = _merchantId;
+    } else {
+      debugPrint('🤖 STRIPE INIT: Not iOS, skipping Apple Pay configuration');
     }
     
-    await Stripe.instance.applySettings();
+    try {
+      await Stripe.instance.applySettings();
+      debugPrint('✅ STRIPE INIT: Stripe initialized successfully');
+    } catch (e) {
+      debugPrint('❌ STRIPE INIT: Failed to initialize Stripe: $e');
+      rethrow;
+    }
   }
 
   /// Check if Apple Pay/Google Pay is available (Platform Pay)

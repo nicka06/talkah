@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:io' show Platform;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/subscription_service.dart';
-import '../../services/stripe_payment_service.dart';
-import '../../models/subscription_plan.dart';
 import '../../models/usage_tracking.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -49,7 +46,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Future<void> _checkPlatformPaySupport() async {
     try {
-      final isSupported = await StripePaymentService.isPlatformPaySupported();
+      final isSupported = await SubscriptionService.isPlatformPaySupported();
       if (mounted) {
         setState(() {
           _isPlatformPaySupported = isSupported;
@@ -90,20 +87,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         return;
       }
 
-      // Create subscription and get client secret using real Stripe service
-      final subscriptionData = await StripePaymentService.createSubscription(
+      // Create subscription and get client secret using new SubscriptionService
+      final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
         email: user.email ?? '',
         userId: user.id,
         planType: planType,
         isYearly: isYearly,
       );
-
-      final clientSecret = subscriptionData['latest_invoice']['payment_intent']['client_secret'];
-      if (clientSecret == null) {
-        Navigator.pop(context);
-        _showErrorDialog('Failed to create payment intent');
-        return;
-      }
 
       Navigator.pop(context); // Close loading dialog
 
@@ -123,7 +113,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ? (Platform.isIOS ? 'Processing Apple Pay...' : 'Processing Google Pay...')
           : 'Processing payment...');
 
-      final pricing = StripePaymentService.getPricing();
+      final pricing = SubscriptionService.getPricing();
       final key = '${planType}_${isYearly ? 'yearly' : 'monthly'}';
       final amount = pricing[key] ?? 0.0;
       final planName = '${planType.toUpperCase()} Plan';
@@ -132,15 +122,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
       if (_isPlatformPaySupported) {
         // Use Platform Pay (Apple Pay / Google Pay)
-        success = await StripePaymentService.processPlatformPayPayment(
+        success = await SubscriptionService.processPlatformPay(
           clientSecret: clientSecret,
-          email: email,
           amount: amount,
           planName: planName,
         );
       } else {
         // Fallback to card payment
-        success = await StripePaymentService.confirmPayment(
+        success = await SubscriptionService.confirmCardPayment(
           clientSecret: clientSecret,
           email: email,
         );
@@ -154,7 +143,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         await _loadUsage(); // Reload usage data
         _showSuccessDialog(planType, isYearly);
       } else {
-        _showErrorDialog('Payment was not completed. Please try again.');
+        // No error dialog here, as the service handles logging the cancellation
+        // This prevents showing an error when a user intentionally closes the pay sheet.
       }
 
     } catch (e) {
@@ -593,7 +583,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     bool isRecommended = false,
   }) {
     // Get real pricing from Stripe service
-    final pricing = StripePaymentService.getPricing();
+    final pricing = SubscriptionService.getPricing();
     final monthlyKey = '${planType}_monthly';
     final yearlyKey = '${planType}_yearly';
     
