@@ -41,75 +41,80 @@ class _LoginScreenState extends State<LoginScreen> {
     
     return Scaffold(
       backgroundColor: Colors.red, // Full red background
-      body: BlocListener<AuthBloc, AuthState>(
-        listenWhen: (previous, current) {
-          if (kDebugMode) {
-            debugPrint('🎭 LOGIN BlocListener.listenWhen: ${previous.runtimeType} -> ${current.runtimeType}');
-          }
-          return true;
-        },
-        listener: (context, state) {
-          if (kDebugMode) {
-            debugPrint('🎪 LOGIN BlocListener triggered: ${state.runtimeType}');
-          }
-          
-          if (state is AuthError) {
-            ErrorDisplayWidget.showNotification(context, state.error);
-          }
-        },
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: screenWidth * 0.08, // 8% of screen width
-              vertical: screenHeight * 0.03,  // 3% of screen height
-            ),
-            child: Column(
-              children: [
-                // Top Section - Talkah Branding
-                Expanded(
-                  flex: 2,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Graffiti-style Talkah Text - Responsive
-                        Text(
-                          'TALKAH',
-                          style: TextStyle(
-                            fontSize: (screenWidth * 0.17).clamp(32.0, 90.0), // Reduced from 18% to 12%, max 60
-                            fontWeight: FontWeight.w900,
-                            color: Colors.black,
-                            letterSpacing: screenWidth * 0.01, // 1% of width
-                            shadows: [
-                              Shadow(
-                                offset: Offset(sizeScale * 3, sizeScale * 3),
-                                blurRadius: 0,
-                                color: Colors.white.withOpacity(0.3),
+      body: SingleChildScrollView(
+        child: BlocListener<AuthBloc, AuthState>(
+          listenWhen: (previous, current) {
+            if (kDebugMode) {
+              debugPrint('🎭 LOGIN BlocListener.listenWhen: ${previous.runtimeType} -> ${current.runtimeType}');
+            }
+            return true;
+          },
+          listener: (context, state) {
+            if (kDebugMode) {
+              debugPrint('🎪 LOGIN BlocListener triggered: ${state.runtimeType}');
+            }
+            
+            if (state is AuthError) {
+              ErrorDisplayWidget.showNotification(context, state.error);
+            }
+          },
+          child: Container(
+            height: screenHeight,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.08, // 8% of screen width
+                  vertical: screenHeight * 0.03,  // 3% of screen height
+                ),
+                child: Column(
+                  children: [
+                    // Top Section - Talkah Branding
+                    Expanded(
+                      flex: 2,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Graffiti-style Talkah Text - Responsive
+                            Text(
+                              'TALKAH',
+                              style: TextStyle(
+                                fontSize: (screenWidth * 0.17).clamp(32.0, 90.0), // Reduced from 18% to 12%, max 60
+                                fontWeight: FontWeight.w900,
+                                color: Colors.black,
+                                letterSpacing: screenWidth * 0.01, // 1% of width
+                                shadows: [
+                                  Shadow(
+                                    offset: Offset(sizeScale * 3, sizeScale * 3),
+                                    blurRadius: 0,
+                                    color: Colors.white.withOpacity(0.3),
+                                  ),
+                                  Shadow(
+                                    offset: Offset(-sizeScale, -sizeScale),
+                                    blurRadius: 0,
+                                    color: Colors.black.withOpacity(0.5),
+                                  ),
+                                ],
+                                // Using built-in fonts for now, can replace with graffiti font later
+                                fontFamily: 'Arial Black',
                               ),
-                              Shadow(
-                                offset: Offset(-sizeScale, -sizeScale),
-                                blurRadius: 0,
-                                color: Colors.black.withOpacity(0.5),
-                              ),
-                            ],
-                            // Using built-in fonts for now, can replace with graffiti font later
-                            fontFamily: 'Arial Black',
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                    
+                    // Middle Section - Auth Buttons
+                    Expanded(
+                      flex: 3,
+                      child: !_showLogin ? _buildSignUpSection(screenSize, fontScale) : _buildLoginSection(screenSize, fontScale),
+                    ),
+                    
+                    // Bottom Section - Switch between sign up and login
+                    _buildBottomToggle(screenSize, fontScale),
+                  ],
                 ),
-                
-                // Middle Section - Auth Buttons
-                Expanded(
-                  flex: 3,
-                  child: !_showLogin ? _buildSignUpSection(screenSize, fontScale) : _buildLoginSection(screenSize, fontScale),
-                ),
-                
-                // Bottom Section - Switch between sign up and login
-                _buildBottomToggle(screenSize, fontScale),
-              ],
+              ),
             ),
           ),
         ),
@@ -177,152 +182,154 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } else {
       // Show email signup form
-      return Form(
-        key: _formKey,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'SIGN UP',
-              style: TextStyle(
-                fontSize: (screenWidth * 0.06).clamp(18.0, 26.0), // 6% of width
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-                letterSpacing: screenWidth * 0.005, // 0.5% of width
-              ),
-            ),
-            SizedBox(height: screenHeight * 0.04), // 4% of height
-            
-            // Email Field
-            TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
-              ),
-              decoration: InputDecoration(
-                labelText: 'Email',
-                labelStyle: TextStyle(
-                  color: Colors.black87,
-                  fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
-                ),
-                prefixIcon: Icon(
-                  Icons.email, 
-                  color: Colors.black87,
-                  size: (screenWidth * 0.055).clamp(20.0, 24.0),
-                ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.9),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
+      return SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'SIGN UP',
+                style: TextStyle(
+                  fontSize: (screenWidth * 0.06).clamp(18.0, 26.0), // 6% of width
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                  letterSpacing: screenWidth * 0.005, // 0.5% of width
                 ),
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your email';
-                }
-                if (!value.contains('@')) {
-                  return 'Please enter a valid email';
-                }
-                return null;
-              },
-            ),
-            
-            SizedBox(height: screenHeight * 0.02), // 2% of height
-            
-            // Password Field
-            TextFormField(
-              controller: _passwordController,
-              obscureText: true,
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
-              ),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                labelStyle: TextStyle(
-                  color: Colors.black87,
-                  fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
+              SizedBox(height: screenHeight * 0.04), // 4% of height
+              
+              // Email Field
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
                 ),
-                prefixIcon: Icon(
-                  Icons.lock, 
-                  color: Colors.black87,
-                  size: (screenWidth * 0.055).clamp(20.0, 24.0),
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  labelStyle: TextStyle(
+                    color: Colors.black87,
+                    fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.email, 
+                    color: Colors.black87,
+                    size: (screenWidth * 0.055).clamp(20.0, 24.0),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.9),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
+                  ),
                 ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.9),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
-                return null;
-              },
-            ),
-            
-            // Forgot Password Button
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
-                  );
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Please enter a valid email';
+                  }
+                  return null;
                 },
-                child: Text(
-                  'Forgot Password?',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: (screenWidth * 0.035).clamp(12.0, 15.0),
+              ),
+              
+              SizedBox(height: screenHeight * 0.02), // 2% of height
+              
+              // Password Field
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  labelStyle: TextStyle(
+                    color: Colors.black87,
+                    fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.lock, 
+                    color: Colors.black87,
+                    size: (screenWidth * 0.055).clamp(20.0, 24.0),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.9),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your password';
+                  }
+                  if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
+              
+              // Forgot Password Button
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                    );
+                  },
+                  child: Text(
+                    'Forgot Password?',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: (screenWidth * 0.035).clamp(12.0, 15.0),
+                    ),
                   ),
                 ),
               ),
-            ),
-            
-            SizedBox(height: screenHeight * 0.03), // 3% of height
-            
-            // Sign Up Button
-            BlocBuilder<AuthBloc, AuthState>(
-              builder: (context, state) {
-                final isLoading = state is AuthLoading;
-                return _buildAuthButton(
-                  icon: Icons.person_add,
-                  text: isLoading ? 'SIGNING UP...' : 'SIGN UP',
-                  onPressed: isLoading ? null : _onSignUp,
-                  backgroundColor: Colors.black,
-                  textColor: Colors.white,
-                  screenSize: screenSize,
-                  fontScale: fontScale,
-                );
-              },
-            ),
-          ],
+              
+              SizedBox(height: screenHeight * 0.03), // 3% of height
+              
+              // Sign Up Button
+              BlocBuilder<AuthBloc, AuthState>(
+                builder: (context, state) {
+                  final isLoading = state is AuthLoading;
+                  return _buildAuthButton(
+                    icon: Icons.person_add,
+                    text: isLoading ? 'SIGNING UP...' : 'SIGN UP',
+                    onPressed: isLoading ? null : _onSignUp,
+                    backgroundColor: Colors.black,
+                    textColor: Colors.white,
+                    screenSize: screenSize,
+                    fontScale: fontScale,
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -388,152 +395,154 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } else {
       // Show email login form
-      return Form(
-        key: _formKey,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'LOG IN',
-              style: TextStyle(
-                fontSize: (screenWidth * 0.06).clamp(18.0, 26.0), // 6% of width
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-                letterSpacing: screenWidth * 0.005, // 0.5% of width
-              ),
-            ),
-            SizedBox(height: screenHeight * 0.04), // 4% of height
-            
-            // Email Field
-            TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
-              ),
-              decoration: InputDecoration(
-                labelText: 'Email',
-                labelStyle: TextStyle(
-                  color: Colors.black87,
-                  fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
-                ),
-                prefixIcon: Icon(
-                  Icons.email, 
-                  color: Colors.black87,
-                  size: (screenWidth * 0.055).clamp(20.0, 24.0),
-                ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.9),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
+      return SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'LOG IN',
+                style: TextStyle(
+                  fontSize: (screenWidth * 0.06).clamp(18.0, 26.0), // 6% of width
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                  letterSpacing: screenWidth * 0.005, // 0.5% of width
                 ),
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your email';
-                }
-                if (!value.contains('@')) {
-                  return 'Please enter a valid email';
-                }
-                return null;
-              },
-            ),
-            
-            SizedBox(height: screenHeight * 0.02), // 2% of height
-            
-            // Password Field
-            TextFormField(
-              controller: _passwordController,
-              obscureText: true,
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
-              ),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                labelStyle: TextStyle(
-                  color: Colors.black87,
-                  fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
+              SizedBox(height: screenHeight * 0.04), // 4% of height
+              
+              // Email Field
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
                 ),
-                prefixIcon: Icon(
-                  Icons.lock, 
-                  color: Colors.black87,
-                  size: (screenWidth * 0.055).clamp(20.0, 24.0),
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  labelStyle: TextStyle(
+                    color: Colors.black87,
+                    fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.email, 
+                    color: Colors.black87,
+                    size: (screenWidth * 0.055).clamp(20.0, 24.0),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.9),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
+                  ),
                 ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.9),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                  borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
-                return null;
-              },
-            ),
-            
-            // Forgot Password Button
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
-                  );
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Please enter a valid email';
+                  }
+                  return null;
                 },
-                child: Text(
-                  'Forgot Password?',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: (screenWidth * 0.035).clamp(12.0, 15.0),
+              ),
+              
+              SizedBox(height: screenHeight * 0.02), // 2% of height
+              
+              // Password Field
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  labelStyle: TextStyle(
+                    color: Colors.black87,
+                    fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.lock, 
+                    color: Colors.black87,
+                    size: (screenWidth * 0.055).clamp(20.0, 24.0),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.9),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 2),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    borderSide: BorderSide(color: Colors.black, width: fontScale * 3),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your password';
+                  }
+                  if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
+              
+              // Forgot Password Button
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                    );
+                  },
+                  child: Text(
+                    'Forgot Password?',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: (screenWidth * 0.035).clamp(12.0, 15.0),
+                    ),
                   ),
                 ),
               ),
-            ),
-            
-            SizedBox(height: screenHeight * 0.03), // 3% of height
-            
-            // Login Button
-            BlocBuilder<AuthBloc, AuthState>(
-              builder: (context, state) {
-                final isLoading = state is AuthLoading;
-                return _buildAuthButton(
-                  icon: Icons.login,
-                  text: isLoading ? 'LOGGING IN...' : 'LOG IN',
-                  onPressed: isLoading ? null : _onLogin,
-                  backgroundColor: Colors.black,
-                  textColor: Colors.white,
-                  screenSize: screenSize,
-                  fontScale: fontScale,
-                );
-              },
-            ),
-          ],
+              
+              SizedBox(height: screenHeight * 0.03), // 3% of height
+              
+              // Login Button
+              BlocBuilder<AuthBloc, AuthState>(
+                builder: (context, state) {
+                  final isLoading = state is AuthLoading;
+                  return _buildAuthButton(
+                    icon: Icons.login,
+                    text: isLoading ? 'LOGGING IN...' : 'LOG IN',
+                    onPressed: isLoading ? null : _onLogin,
+                    backgroundColor: Colors.black,
+                    textColor: Colors.white,
+                    screenSize: screenSize,
+                    fontScale: fontScale,
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       );
     }
