@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
-import 'package:http/http.dart' as http;
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -232,50 +230,61 @@ class SubscriptionService {
 
       dev.log('🔄 SubscriptionService: Fetching usage for user $userId...');
       
+      // Query usage_tracking table directly (like web version)
       final response = await _supabase
-          .rpc('get_current_month_usage', params: {'user_uuid': userId});
+          .from('usage_tracking')
+          .select('*')
+          .eq('user_id', userId)
+          .order('billing_period_start', ascending: false)
+          .limit(1)
+          .single();
 
-      if (response == null || (response as List).isEmpty) {
-        dev.log('⚠️ SubscriptionService: No usage data found');
+      if (response == null) {
+        dev.log('⚠️ SubscriptionService: No usage tracking record found for user: $userId');
         return null;
       }
 
-      final usageData = (response as List).first;
+      // Extract usage data with fallback values
+      final callsUsed = response['calls_used'] ?? 0;
+      final textsUsed = response['texts_used'] ?? 0;
+      final emailsUsed = response['emails_used'] ?? 0;
       
-      final callsUsed = usageData['calls_used'] ?? 0;
-      final textsUsed = usageData['texts_used'] ?? 0;
-      final emailsUsed = usageData['emails_used'] ?? 0;
-      final tier = usageData['tier'] ?? 'free';
+      // Get limits from the usage record or use defaults
+      final phoneCallsLimit = response['phone_calls_limit'] ?? 1;
+      final textChainsLimit = response['text_chains_limit'] ?? 1;
+      final emailsLimit = response['emails_limit'] ?? 1;
       
-      final limits = {
-        'free': {'calls': 1, 'texts': 1, 'emails': 1},
-        'pro': {'calls': 5, 'texts': 10, 'emails': -1},
-        'premium': {'calls': -1, 'texts': -1, 'emails': -1}
-      };
+      // Parse billing period dates
+      final billingPeriodStart = response['billing_period_start'] != null 
+          ? DateTime.parse(response['billing_period_start'])
+          : DateTime(DateTime.now().year, DateTime.now().month, 1);
       
-      final tierLimits = limits[tier] ?? limits['free']!;
-      
-      final now = DateTime.now();
-      final billingStart = DateTime(now.year, now.month, 1);
-      final billingEnd = DateTime(now.year, now.month + 1, 0);
+      final billingPeriodEnd = response['billing_period_end'] != null
+          ? DateTime.parse(response['billing_period_end'])
+          : DateTime(DateTime.now().year, DateTime.now().month + 1, 0);
       
       final usage = UsageTracking(
         userId: userId,
         phoneCallsUsed: callsUsed,
         textChainsUsed: textsUsed,
         emailsUsed: emailsUsed,
-        phoneCallsLimit: tierLimits['calls']!,
-        textChainsLimit: tierLimits['texts']!,
-        emailsLimit: tierLimits['emails']!,
-        billingPeriodStart: billingStart,
-        billingPeriodEnd: billingEnd,
+        phoneCallsLimit: phoneCallsLimit,
+        textChainsLimit: textChainsLimit,
+        emailsLimit: emailsLimit,
+        billingPeriodStart: billingPeriodStart,
+        billingPeriodEnd: billingPeriodEnd,
       );
       
       dev.log('✅ SubscriptionService: Usage retrieved - Phone: ${usage.phoneCallsDisplay}, Text: ${usage.textChainsDisplay}, Email: ${usage.emailsDisplay}');
       return usage;
     } catch (e) {
+      // Handle the case where no usage record exists (like web version)
+      if (e.toString().contains('PGRST116') || e.toString().contains('No rows returned')) {
+        dev.log('⚠️ SubscriptionService: No usage tracking record found - user may be new');
+        return null;
+      }
       dev.log('❌ SubscriptionService: Error fetching usage: $e');
-      rethrow;
+      return null; // Return null instead of rethrowing (like web version)
     }
   }
 
@@ -326,7 +335,10 @@ class SubscriptionService {
   Future<String?> getCurrentPlanId() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return null;
+      if (userId == null) {
+        dev.log('❌ SubscriptionService: No authenticated user');
+        return null;
+      }
 
       final response = await _supabase
           .from('users')
@@ -334,10 +346,13 @@ class SubscriptionService {
           .eq('id', userId)
           .single();
 
-      return response['subscription_plan_id'] as String?;
+      // Return the plan ID or null if not set (like web version)
+      final planId = response['subscription_plan_id'] as String?;
+      dev.log('✅ SubscriptionService: Current plan ID: ${planId ?? 'not set'}');
+      return planId;
     } catch (e) {
       dev.log('❌ SubscriptionService: Error fetching current plan: $e');
-      return null;
+      return null; // Return null instead of rethrowing (like web version)
     }
   }
 
@@ -407,6 +422,83 @@ class SubscriptionService {
       dev.log('✅ SubscriptionService: Event recorded: $eventType');
     } catch (e) {
       dev.log('❌ SubscriptionService: Error recording event: $e');
+    }
+  }
+
+  /// Gets the user's current billing interval (monthly or yearly).
+  /// Reads from users.billing_interval. Returns 'monthly' if not set.
+  Future<String> getCurrentBillingInterval() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        dev.log('❌ SubscriptionService: No authenticated user for billing interval');
+        return 'monthly';
+      }
+      
+      final response = await _supabase
+          .from('users')
+          .select('billing_interval')
+          .eq('id', userId)
+          .single();
+      
+      // Return the billing interval, defaulting to 'monthly' if null (like web version)
+      final billingInterval = response['billing_interval'] as String? ?? 'monthly';
+      dev.log('✅ SubscriptionService: Billing interval: $billingInterval');
+      return billingInterval;
+    } catch (e) {
+      dev.log('❌ SubscriptionService: Error fetching billing interval: $e');
+      return 'monthly'; // Return default instead of rethrowing (like web version)
+    }
+  }
+
+  /// Gets any pending plan change for the user (upgrade/downgrade/interval change).
+  /// Reads from users.pending_plan_id, users.plan_change_effective_date, users.plan_change_type.
+  /// Returns null if no pending change.
+  Future<Map<String, dynamic>?> getPendingPlanChange() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        dev.log('❌ SubscriptionService: No authenticated user for pending plan change');
+        return null;
+      }
+      
+      final response = await _supabase
+          .from('users')
+          .select('pending_plan_id, plan_change_effective_date, plan_change_type')
+          .eq('id', userId)
+          .single();
+      
+      // Return null if no pending plan change (like web version)
+      if (response['pending_plan_id'] == null) {
+        dev.log('✅ SubscriptionService: No pending plan change found');
+        return null;
+      }
+      
+      final pendingChange = {
+        'targetPlanId': response['pending_plan_id'],
+        'effectiveDate': response['plan_change_effective_date'] != null
+            ? DateTime.parse(response['plan_change_effective_date'])
+            : null,
+        'changeType': response['plan_change_type'],
+      };
+      
+      dev.log('✅ SubscriptionService: Pending plan change found: ${pendingChange['changeType']} to ${pendingChange['targetPlanId']}');
+      return pendingChange;
+    } catch (e) {
+      dev.log('❌ SubscriptionService: Error fetching pending plan change: $e');
+      return null; // Return null instead of rethrowing (like web version)
+    }
+  }
+
+  /// Creates a Stripe Customer Portal session for the user via Supabase Edge Function.
+  /// Returns the portal URL string, or null on error.
+  Future<String?> createCustomerPortalSession() async {
+    try {
+      final response = await _supabase.functions.invoke('create-customer-portal-session');
+      return response.data?['url'] as String?;
+    } catch (e) {
+      dev.log('❌ SubscriptionService: Error creating customer portal session: $e');
+      return null;
     }
   }
 } 

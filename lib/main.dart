@@ -10,6 +10,7 @@ import 'blocs/auth/auth_bloc.dart';
 import 'blocs/auth/auth_event.dart';
 import 'blocs/auth/auth_state.dart';
 import 'blocs/usage/usage_bloc.dart';
+import 'blocs/subscription/subscription_bloc.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
@@ -68,6 +69,9 @@ class MyApp extends StatelessWidget {
         ),
         BlocProvider<UsageBloc>(
           create: (context) => UsageBloc(),
+        ),
+        BlocProvider<SubscriptionBloc>(
+          create: (context) => SubscriptionBloc(),
         ),
       ],
       child: BlocListener<AuthBloc, AuthState>(

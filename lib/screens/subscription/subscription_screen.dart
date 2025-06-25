@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/subscription_service.dart';
-import '../../models/usage_tracking.dart';
+import '../../blocs/subscription/subscription_bloc.dart';
+import '../../blocs/subscription/subscription_event.dart';
+import '../../blocs/subscription/subscription_state.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -13,35 +17,15 @@ class SubscriptionScreen extends StatefulWidget {
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   final SubscriptionService _subscriptionService = SubscriptionService();
-  UsageTracking? _usage;
-  bool _isLoading = true;
   bool _isYearly = false; // Toggle state for pricing
   bool _isPlatformPaySupported = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUsage();
     _checkPlatformPaySupport();
-  }
-
-  Future<void> _loadUsage() async {
-    try {
-      final usage = await _subscriptionService.getCurrentUsage();
-      if (mounted) {
-        setState(() {
-          _usage = usage;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading usage: $e');
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    // Load subscription data using BLoC
+    context.read<SubscriptionBloc>().add(const LoadSubscriptionData());
   }
 
   Future<void> _checkPlatformPaySupport() async {
@@ -58,8 +42,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Future<void> _initiatePayment(String planType, bool isYearly) async {
-    if (_isLoading) return;
-
     try {
       // Show loading dialog
       showDialog(
@@ -138,9 +120,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       Navigator.pop(context); // Close processing dialog
 
       if (success) {
-        // Refresh subscription status
-        await _subscriptionService.getSubscriptionStatus();
-        await _loadUsage(); // Reload usage data
+        // Refresh subscription data using BLoC
+        context.read<SubscriptionBloc>().add(const RefreshSubscriptionData());
         _showSuccessDialog(planType, isYearly);
       } else {
         // No error dialog here, as the service handles logging the cancellation
@@ -198,7 +179,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             onPressed: () {
               Navigator.pop(context); // Close dialog
               // Refresh the page to show updated plan
-              _loadUsage();
+              context.read<SubscriptionBloc>().add(const RefreshSubscriptionData());
             },
             child: Text(
               'Continue',
@@ -242,239 +223,356 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  Future<void> _openCustomerPortal() async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.black,
+          content: Row(
+            children: [
+              CircularProgressIndicator(color: Colors.white),
+              const SizedBox(width: 16),
+              Text(
+                'Opening customer portal...',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final portalUrl = await _subscriptionService.createCustomerPortalSession();
+      
+      Navigator.pop(context); // Close loading dialog
+      
+      if (portalUrl != null) {
+        // Open the portal URL in browser
+        final uri = Uri.parse(portalUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Customer portal opened in browser'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          // Refresh subscription data after a delay to catch any changes
+          Future.delayed(Duration(seconds: 2), () {
+            context.read<SubscriptionBloc>().add(const RefreshSubscriptionData());
+          });
+        } else {
+          _showErrorDialog('Could not open customer portal');
+        }
+      } else {
+        _showErrorDialog('Failed to create customer portal session');
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog if still open
+      _showErrorDialog('Failed to open customer portal: ${e.toString()}');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.red,
-      appBar: AppBar(
-        backgroundColor: Colors.red,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios,
-            color: Colors.black,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'SUBSCRIPTION',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-            color: Colors.black,
-            letterSpacing: 1.5,
-            shadows: [
-              Shadow(
-                offset: Offset(2, 2),
-                blurRadius: 0,
-                color: Colors.white.withOpacity(0.3),
+    return BlocBuilder<SubscriptionBloc, SubscriptionState>(
+      builder: (context, state) {
+        return Scaffold(
+          backgroundColor: Colors.red,
+          appBar: AppBar(
+            backgroundColor: Colors.red,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back_ios,
+                color: Colors.black,
               ),
-              Shadow(
-                offset: Offset(-1, -1),
-                blurRadius: 0,
-                color: Colors.black.withOpacity(0.5),
-              ),
-            ],
-            fontFamily: 'Arial Black',
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Current Plan Name
-              Center(
-                child: Text(
-                  'FREE PLAN',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                    letterSpacing: 2.0,
-                    shadows: [
-                      Shadow(
-                        offset: Offset(2, 2),
-                        blurRadius: 0,
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                    ],
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'SUBSCRIPTION',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+                letterSpacing: 1.5,
+                shadows: [
+                  Shadow(
+                    offset: Offset(2, 2),
+                    blurRadius: 0,
+                    color: Colors.white.withOpacity(0.3),
                   ),
-                ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Billing Dates
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(16),
+                  Shadow(
+                    offset: Offset(-1, -1),
+                    blurRadius: 0,
+                    color: Colors.black.withOpacity(0.5),
                   ),
-                  child: Column(
-                    children: [
-                      Text(
-                        _isLoading || _usage == null 
-                            ? 'Loading billing info...'
-                            : _usage!.billingPeriodDisplay,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+                ],
+                fontFamily: 'Arial Black',
+              ),
+            ),
+            centerTitle: true,
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Pending Changes Banner
+                  if (state is SubscriptionLoaded && state.subscriptionStatus.hasPendingChange) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade300),
                       ),
-                      if (!_isLoading && _usage != null && _usage!.timeRemainingInBillingPeriod.inDays > 0) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Renews in ${_usage!.timeRemainingInBillingPeriod.inDays} days',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withOpacity(0.8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule, color: Colors.orange.shade700, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Plan change to ${state.subscriptionStatus.pendingChange!.targetPlanId.toUpperCase()} on ${state.subscriptionStatus.pendingChange!.formattedEffectiveDate}',
+                              style: TextStyle(
+                                color: Colors.orange.shade700,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 32),
-              
-              // Usage Bars (without cards)
-              if (_isLoading)
-                Center(
-                  child: CircularProgressIndicator(color: Colors.black),
-                )
-              else if (_usage != null) ...[
-                _buildUsageBar(
-                  icon: Icons.phone,
-                  label: 'Phone Calls',
-                  used: _usage!.phoneCallsUsed,
-                  limit: _usage!.phoneCallsLimit,
-                  progress: _usage!.phoneCallsProgress,
-                  color: Colors.blue,
-                ),
-                const SizedBox(height: 20),
-                _buildUsageBar(
-                  icon: Icons.chat,
-                  label: 'Text Conversations',
-                  used: _usage!.textChainsUsed,
-                  limit: _usage!.textChainsLimit,
-                  progress: _usage!.textChainsProgress,
-                  color: Colors.green,
-                ),
-                const SizedBox(height: 20),
-                _buildUsageBar(
-                  icon: Icons.email,
-                  label: 'Emails',
-                  used: _usage!.emailsUsed,
-                  limit: _usage!.emailsLimit,
-                  progress: _usage!.emailsProgress,
-                  color: Colors.orange,
-                ),
-              ],
-              
-              const SizedBox(height: 40),
-              
-              // Three Plans Horizontally
-              Text(
-                'UPGRADE PLANS',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              // Monthly/Annual Toggle
-              Center(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildToggleButton('Monthly', !_isYearly),
-                      _buildToggleButton('Annual', _isYearly),
-                    ],
-                  ),
-                ),
-              ),
-              
-              if (_isYearly)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Center(
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Current Plan Name
+                  Center(
                     child: Text(
-                      'Save up to 25% with annual billing',
+                      state is SubscriptionLoaded 
+                          ? '${state.subscriptionStatus.planDisplayName} PLAN'
+                          : 'LOADING...',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
                         color: Colors.black,
-                        fontWeight: FontWeight.w600,
+                        letterSpacing: 2.0,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(2, 2),
+                            blurRadius: 0,
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              
-              const SizedBox(height: 24),
-              
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildPlanCard(
-                      planName: 'FREE',
-                      monthlyPrice: '\$0',
-                      yearlyPrice: '\$0',
-                      features: [
-                        '1 phone call',
-                        '1 text conversation', 
-                        '1 email',
-                      ],
-                      isCurrentPlan: true,
-                      planType: 'free',
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Billing Dates
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            state is SubscriptionLoaded 
+                                ? (state.subscriptionStatus.isFree 
+                                    ? 'Free Plan - No billing cycle'
+                                    : (state.subscriptionStatus.billingCycleStart != null
+                                        ? state.subscriptionStatus.formattedBillingPeriod
+                                        : 'Billing info unavailable'))
+                                : 'Loading billing info...',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if (state is SubscriptionLoaded && state.subscriptionStatus.daysRemainingInCycle != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Renews in ${state.subscriptionStatus.daysRemainingInCycle} days',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 16),
-                    _buildPlanCard(
-                      planName: 'PRO',
-                      monthlyPrice: '\$8.99',
-                      yearlyPrice: '\$79.99',
-                      features: [
-                        '15 phone calls',
-                        '20 text conversations',
-                        'Unlimited emails',
-                      ],
-                      isRecommended: true,
-                      planType: 'pro',
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Usage Bars (without cards)
+                  if (state is SubscriptionLoading)
+                    Center(
+                      child: CircularProgressIndicator(color: Colors.black),
+                    )
+                  else if (state is SubscriptionLoaded && state.usage != null) ...[
+                    _buildUsageBar(
+                      icon: Icons.phone,
+                      label: 'Phone Calls',
+                      used: state.usage!.phoneCallsUsed,
+                      limit: state.usage!.phoneCallsLimit,
+                      progress: state.usage!.phoneCallsProgress,
+                      color: Colors.blue,
                     ),
-                    const SizedBox(width: 16),
-                    _buildPlanCard(
-                      planName: 'PREMIUM',
-                      monthlyPrice: '\$14.99',
-                      yearlyPrice: '\$119.99',
-                      features: [
-                        'Unlimited calls',
-                        'Unlimited texts',
-                        'Unlimited emails',
-                      ],
-                      planType: 'premium',
+                    const SizedBox(height: 20),
+                    _buildUsageBar(
+                      icon: Icons.chat,
+                      label: 'Text Conversations',
+                      used: state.usage!.textChainsUsed,
+                      limit: state.usage!.textChainsLimit,
+                      progress: state.usage!.textChainsProgress,
+                      color: Colors.green,
+                    ),
+                    const SizedBox(height: 20),
+                    _buildUsageBar(
+                      icon: Icons.email,
+                      label: 'Emails',
+                      used: state.usage!.emailsUsed,
+                      limit: state.usage!.emailsLimit,
+                      progress: state.usage!.emailsProgress,
+                      color: Colors.orange,
                     ),
                   ],
-                ),
+                  
+                  const SizedBox(height: 40),
+                  
+                  // Three Plans Horizontally
+                  Text(
+                    'UPGRADE PLANS',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Monthly/Annual Toggle
+                  Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildToggleButton('Monthly', !_isYearly),
+                          _buildToggleButton('Annual', _isYearly),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  if (_isYearly)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Center(
+                        child: Text(
+                          'Save up to 33% with annual billing',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildPlanCard(
+                          planName: 'FREE',
+                          monthlyPrice: '\$0',
+                          yearlyPrice: '\$0',
+                          features: [
+                            '1 phone call',
+                            '1 text conversation', 
+                            '1 email',
+                          ],
+                          planType: 'free',
+                          subscriptionState: state,
+                        ),
+                        const SizedBox(width: 16),
+                        _buildPlanCard(
+                          planName: 'PRO',
+                          monthlyPrice: '\$8.99',
+                          yearlyPrice: '\$79.99',
+                          features: [
+                            '15 phone calls',
+                            '20 text conversations',
+                            'Unlimited emails',
+                          ],
+                          isRecommended: true,
+                          planType: 'pro',
+                          subscriptionState: state,
+                        ),
+                        const SizedBox(width: 16),
+                        _buildPlanCard(
+                          planName: 'PREMIUM',
+                          monthlyPrice: '\$14.99',
+                          yearlyPrice: '\$119.99',
+                          features: [
+                            'Unlimited calls',
+                            'Unlimited texts',
+                            'Unlimited emails',
+                          ],
+                          planType: 'premium',
+                          subscriptionState: state,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Manage Subscription Button - Only show for paid users
+                  if (state is SubscriptionLoaded && !state.subscriptionStatus.isFree) ...[
+                    const SizedBox(height: 40),
+                    Center(
+                      child: TextButton(
+                        onPressed: _openCustomerPortal,
+                        child: Text(
+                          'Manage Subscription',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -579,7 +677,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     required String yearlyPrice,
     required List<String> features,
     required String planType,
-    bool isCurrentPlan = false,
+    required SubscriptionState subscriptionState,
     bool isRecommended = false,
   }) {
     // Get real pricing from Stripe service
@@ -593,12 +691,59 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final displayPrice = _isYearly ? '\$${realYearlyPrice.toStringAsFixed(2)}' : '\$${realMonthlyPrice.toStringAsFixed(2)}';
     final displayPeriod = _isYearly ? ' / year' : ' / month';
     
+    // Determine if this is the current plan
+    bool isCurrentPlan = false;
+    String buttonText = 'UPGRADE';
+    bool isButtonDisabled = false;
+    
+    if (subscriptionState is SubscriptionLoaded) {
+      final currentPlanId = subscriptionState.subscriptionStatus.planId;
+      final currentBillingInterval = subscriptionState.subscriptionStatus.billingInterval;
+      final targetBillingInterval = _isYearly ? 'yearly' : 'monthly';
+      
+      // Check if this is the current plan
+      // For free plans, both monthly and yearly should show "CURRENT" since they're the same plan
+      if (planType == 'free' && currentPlanId == 'free') {
+        isCurrentPlan = true;
+        buttonText = 'CURRENT';
+        isButtonDisabled = true; // Disable button but keep it visible
+      } else {
+        // For paid plans, check both plan and billing interval
+        isCurrentPlan = planType == currentPlanId && currentBillingInterval == targetBillingInterval;
+        
+        if (isCurrentPlan) {
+          buttonText = 'CURRENT';
+          isButtonDisabled = true; // Disable button but keep it visible
+        } else {
+          // Determine if this is an upgrade or downgrade
+          final planHierarchy = ['free', 'pro', 'premium'];
+          final currentIndex = planHierarchy.indexOf(currentPlanId);
+          final targetIndex = planHierarchy.indexOf(planType);
+          
+          if (targetIndex > currentIndex) {
+            buttonText = 'UPGRADE';
+          } else if (targetIndex < currentIndex) {
+            buttonText = 'DOWNGRADE';
+          } else {
+            // Same plan, different billing interval
+            if (targetBillingInterval == 'yearly' && currentBillingInterval == 'monthly') {
+              buttonText = 'UPGRADE'; // Upgrading to yearly
+            } else {
+              buttonText = 'DOWNGRADE'; // Downgrading to monthly
+            }
+          }
+        }
+      }
+    }
+    
     return Container(
       width: 200,
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius: BorderRadius.circular(16),
-        border: isRecommended ? Border.all(color: Colors.white, width: 2) : null,
+        border: isCurrentPlan 
+            ? Border.all(color: Colors.white, width: 3) // White border for current plan only
+            : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -612,27 +757,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Recommended badge
-            if (isRecommended)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'RECOMMENDED',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            
-            if (isRecommended) const SizedBox(height: 12),
-            
             // Plan name
             Text(
               planName,
@@ -713,9 +837,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: isCurrentPlan ? null : () => _initiatePayment(planType, _isYearly),
+                onPressed: isButtonDisabled ? () {} : () => _initiatePayment(planType, _isYearly),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isCurrentPlan ? Colors.grey : Colors.white,
+                  backgroundColor: isButtonDisabled ? Colors.grey : Colors.white,
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
@@ -723,7 +847,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ),
                 ),
                 child: Text(
-                  isCurrentPlan ? 'CURRENT' : 'UPGRADE',
+                  buttonText,
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.5,

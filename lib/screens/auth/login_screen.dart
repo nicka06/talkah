@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
-import '../../models/app_error.dart';
 import '../../widgets/error_display_widget.dart';
 import 'forgot_password_screen.dart'; // Import the new screen
 
