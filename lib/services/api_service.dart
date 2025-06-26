@@ -8,7 +8,9 @@ import '../models/email_record.dart';
 import '../models/sms_record.dart';
 import '../models/activity_record.dart';
 import '../models/user_model.dart';
+import '../models/app_error.dart';
 import './subscription_service.dart';
+import './error_handler_service.dart';
 
 // Exception class for usage limit errors
 class UsageLimitException implements Exception {
@@ -252,19 +254,44 @@ class ApiService {
   // Initiate email change with verification
   static Future<bool> initiateEmailChange({required String newEmail}) async {
     try {
-      // Supabase automatically sends verification email when updating email
-      final response = await SupabaseConfig.auth.updateUser(
-        supabase.UserAttributes(email: newEmail),
-      );
-      
-      if (response.user != null) {
-        return true;
-      } else {
-        print('Error initiating email change: No user returned');
+      final user = SupabaseConfig.client.auth.currentUser;
+      if (user == null) {
+        ErrorHandlerService().logError(
+          AppError.withTimestamp(
+            type: ErrorType.authentication,
+            code: 'AUTH_REQUIRED',
+            title: 'User Not Authenticated',
+            message: 'User must be authenticated to change their email.',
+            technicalDetails: 'Attempted to change email while user was null.'
+          )
+        );
         return false;
       }
-    } catch (e) {
-      print('Error initiating email change: $e');
+
+      // Step 1: Store the pending email in the public.users table FIRST.
+      // Our RLS policy (set in Supabase dashboard) must allow this.
+      await SupabaseConfig.client
+          .from('users')
+          .update({'pending_email': newEmail})
+          .eq('id', user.id);
+
+      // Step 2: Trigger the Supabase auth email change process.
+      // This sends the verification link to the user's OLD email address.
+      await SupabaseConfig.client.auth.updateUser(
+        supabase.UserAttributes(email: newEmail),
+      );
+
+      return true;
+    } catch (e, st) {
+      ErrorHandlerService().logError(
+        AppError.withTimestamp(
+          type: ErrorType.serverError,
+          code: 'EMAIL_CHANGE_FAILED',
+          title: 'Email Change Failed',
+          message: 'An error occurred while trying to initiate the email change.',
+          technicalDetails: 'Error: $e\nContext: ApiService.initiateEmailChange\nStack: $st',
+        ),
+      );
       return false;
     }
   }

@@ -36,7 +36,7 @@ class SubscriptionStatus extends Equatable {
         : null,
       billingInterval: json['billing_interval'] ?? 'monthly',
       stripeCustomerId: json['stripe_customer_id'] as String?,
-      pendingChange: json['pending_plan_id'] != null 
+      pendingChange: json.containsKey('pending_plan_id') && json['pending_plan_id'] != null
         ? PendingPlanChange.fromJson(json) 
         : null,
     );

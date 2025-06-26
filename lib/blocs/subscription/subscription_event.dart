@@ -47,4 +47,10 @@ class CancelSubscription extends SubscriptionEvent {
 /// Event to refresh subscription data (after returning from customer portal)
 class RefreshSubscriptionData extends SubscriptionEvent {
   const RefreshSubscriptionData();
+}
+
+/// Event triggered when the user selects the 'Free' plan from the UI,
+/// indicating a request to downgrade from a paid plan.
+class DowngradeToFreeRequested extends SubscriptionEvent {
+  const DowngradeToFreeRequested();
 } 

@@ -122,8 +122,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
           size: 64,
         ),
         title: const Text('Payment Successful!'),
-        content: Text(
-          'Welcome to $_planDisplayName! Your subscription is now active.',
+        content: SingleChildScrollView(
+          child: ListBody(
+            children: <Widget>[
+              Text(
+                'Welcome to $_planDisplayName! Your subscription is now active.',
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(

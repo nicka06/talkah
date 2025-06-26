@@ -110,13 +110,13 @@ serve(async (req: Request) => {
           messages: [
             {
               role: 'system',
-              content: 'You are an AI assistant that writes and sends real emails on behalf of users. Write natural, conversational emails that respond to the topic in a friendly, casual way. Don\'t overthink it - just write like you\'re having a normal conversation via email. No need to be overly formal or professional unless the topic specifically calls for it.'
+              content: 'You are an AI assistant that writes and sends real emails to the users of this app. Write natural, conversational emails that respond to the topic in a friendly, casual way. Don\'t overthink it - just write like you\'re having a normal conversation via email. No need to be overly formal or professional unless the topic specifically calls for it.'
             },
             {
               role: 'user',
               content: `Write a complete email that will be sent to ${recipient_email} with the subject "${subject}". The email should be about: ${topic}. 
 
-Write this as a real email that will be sent immediately. Just respond naturally to the topic 
+Write this as a real email that will be sent immediately. Just respond naturally to the topic. Please don't make the email a "template" or something like that. Rather, make it an email that you are sening to someone. If you feel like signing the email, sign it as "Talkah". 
 
 The email will be sent from ${fromEmail}.`
             }
