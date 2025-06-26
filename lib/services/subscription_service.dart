@@ -452,7 +452,7 @@ class SubscriptionService {
   }
 
   /// Gets any pending plan change for the user (upgrade/downgrade/interval change).
-  /// Reads from users.pending_plan_id, users.plan_change_effective_date, users.plan_change_type.
+  /// Reads from the `plan_changes` table for the most recent entry.
   /// Returns null if no pending change.
   Future<Map<String, dynamic>?> getPendingPlanChange() async {
     try {
@@ -463,26 +463,26 @@ class SubscriptionService {
       }
       
       final response = await _supabase
-          .from('users')
-          .select('pending_plan_id, plan_change_effective_date, plan_change_type')
-          .eq('id', userId)
-          .single();
+          .from('plan_changes')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
       
-      // Return null if no pending plan change (like web version)
-      if (response['pending_plan_id'] == null) {
-        dev.log('✅ SubscriptionService: No pending plan change found');
+      if (response == null || response['status'] != 'pending') {
         return null;
       }
       
+      // IMPORTANT: The keys in this map must match what SubscriptionStatus.fromJson and
+      // PendingPlanChange.fromJson expect.
       final pendingChange = {
-        'targetPlanId': response['pending_plan_id'],
-        'effectiveDate': response['plan_change_effective_date'] != null
-            ? DateTime.parse(response['plan_change_effective_date'])
-            : null,
-        'changeType': response['plan_change_type'],
+        'pending_plan_id': response['id'],
+        'plan_change_effective_date': response['effective_date'],
+        'plan_change_type': response['change_type'],
       };
       
-      dev.log('✅ SubscriptionService: Pending plan change found: ${pendingChange['changeType']} to ${pendingChange['targetPlanId']}');
+      dev.log('✅ SubscriptionService: Pending plan change found and parsed: $pendingChange');
       return pendingChange;
     } catch (e) {
       dev.log('❌ SubscriptionService: Error fetching pending plan change: $e');

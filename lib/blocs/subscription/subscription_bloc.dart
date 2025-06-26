@@ -21,6 +21,7 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionState> {
     on<SwitchBillingInterval>(_onSwitchBillingInterval);
     on<CancelSubscription>(_onCancelSubscription);
     on<RefreshSubscriptionData>(_onRefreshSubscriptionData);
+    on<DowngradeToFreeRequested>(_onDowngradeToFreeRequested);
 
     // Listen to auth state changes to reload subscription data when user changes
     _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
@@ -89,6 +90,50 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionState> {
       dev.log('❌ SubscriptionBloc: Error loading subscription data: $e');
       emit(SubscriptionError(
         message: 'Failed to load subscription data',
+        details: e.toString(),
+      ));
+    }
+  }
+
+  /// Handle downgrade to the 'Free' plan
+  Future<void> _onDowngradeToFreeRequested(
+    DowngradeToFreeRequested event,
+    Emitter<SubscriptionState> emit,
+  ) async {
+    dev.log('🔄 SubscriptionBloc: Downgrading subscription to Free...');
+
+    emit(SubscriptionUpdating(
+      updatingMessage: 'Downgrading to Free plan...',
+    ));
+
+    try {
+      // Call the update-subscription-plan Edge Function to cancel at period end
+      final response = await Supabase.instance.client.functions.invoke(
+        'update-subscription-plan',
+        body: {
+          'planId': 'free',
+          'isYearly': false,
+          'changeType': 'downgrade',
+        },
+      );
+
+      if (response.data?['success'] == true) {
+        dev.log('✅ SubscriptionBloc: Subscription downgrade to free successful');
+        
+        // Reload subscription data to get updated information
+        add(const LoadSubscriptionData());
+      } else {
+        dev.log('❌ SubscriptionBloc: Failed to downgrade subscription');
+        emit(SubscriptionError(
+          message: 'Failed to downgrade to Free plan',
+          details: response.data?['error'] ?? 'Unknown error',
+        ));
+      }
+
+    } catch (e) {
+      dev.log('❌ SubscriptionBloc: Error downgrading subscription: $e');
+      emit(SubscriptionError(
+        message: 'Failed to downgrade to Free plan',
         details: e.toString(),
       ));
     }

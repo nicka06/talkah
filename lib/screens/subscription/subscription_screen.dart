@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:developer' as dev;
 import '../../services/subscription_service.dart';
 import '../../blocs/subscription/subscription_bloc.dart';
 import '../../blocs/subscription/subscription_event.dart';
@@ -85,6 +86,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     } catch (e) {
       Navigator.pop(context); // Close loading dialog
       _showErrorDialog('Payment initiation failed: ${e.toString()}');
+    }
+  }
+
+  void _handlePlanSelection(String planType, bool isYearly) {
+    if (planType == 'free') {
+      context.read<SubscriptionBloc>().add(const DowngradeToFreeRequested());
+    } else {
+      _initiatePayment(planType, isYearly);
     }
   }
 
@@ -279,10 +288,36 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
+  String _getPlanDisplayName(String planId) {
+    switch (planId) {
+      case 'free':
+        return 'Free';
+      case 'pro':
+        return 'Pro';
+      case 'premium':
+        return 'Premium';
+      default:
+        // Check if it's a UUID and return a friendlier message
+        if (planId.contains('-')) {
+          return 'a new plan';
+        }
+        return planId.toUpperCase();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SubscriptionBloc, SubscriptionState>(
       builder: (context, state) {
+        dev.log('UI Rebuilding with State: ${state.toString()}');
+
+        if (state is SubscriptionLoaded) {
+          dev.log('State is SubscriptionLoaded. Checking for pending changes...');
+          dev.log('  - hasPendingChange: ${state.subscriptionStatus.hasPendingChange}');
+          if (state.subscriptionStatus.pendingChange != null) {
+            dev.log('  - Pending Change Details: ${state.subscriptionStatus.pendingChange.toString()}');
+          }
+        }
         return Scaffold(
           backgroundColor: Colors.red,
           appBar: AppBar(
@@ -341,7 +376,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Plan change to ${state.subscriptionStatus.pendingChange!.targetPlanId.toUpperCase()} on ${state.subscriptionStatus.pendingChange!.formattedEffectiveDate}',
+                              'Plan change to ${_getPlanDisplayName(state.subscriptionStatus.pendingChange!.targetPlanId)} on ${state.subscriptionStatus.pendingChange!.formattedEffectiveDate}',
                               style: TextStyle(
                                 color: Colors.orange.shade700,
                                 fontSize: 14,
@@ -837,7 +872,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: isButtonDisabled ? () {} : () => _initiatePayment(planType, _isYearly),
+                onPressed: isButtonDisabled ? () {} : () => _handlePlanSelection(planType, _isYearly),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isButtonDisabled ? Colors.grey : Colors.white,
                   foregroundColor: Colors.black,
