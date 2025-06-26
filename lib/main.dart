@@ -78,7 +78,7 @@ class MyApp extends StatelessWidget {
         listener: (context, state) {
           if (state is AuthPasswordRecovery) {
             navigatorKey.currentState?.push(
-              MaterialPageRoute(builder: (_) => ResetPasswordScreen(accessToken: state.accessToken)),
+              MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
             );
           }
         },

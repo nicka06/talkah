@@ -1,28 +1,75 @@
+/// AppError - Centralized error handling and user feedback system
+/// 
+/// This model provides a standardized way to handle and display errors throughout
+/// the application. It includes:
+/// - Error categorization (network, auth, validation, etc.)
+/// - User-friendly error messages and titles
+/// - Technical details for debugging
+/// - Suggested actions for users
+/// - Retry logic indicators
+/// 
+/// USAGE: Used extensively throughout the app in:
+/// - error_handler_service.dart: Centralized error processing
+/// - error_display_widget.dart: UI error display
+/// - All BLoCs: Error state management
+/// - api_service.dart: API error handling
+/// - auth_bloc.dart: Authentication error handling
+/// 
+/// This model is CRITICAL for providing consistent error handling and
+/// user experience across the entire application.
 import 'package:equatable/equatable.dart';
 
+/// Enumeration of error types for categorization and handling
 enum ErrorType {
+  /// Network connectivity issues
   network,
+  /// Authentication failures (login, session expired)
   authentication,
+  /// Authorization failures (permission denied)
   authorization,
+  /// Input validation errors
   validation,
+  /// Server-side errors (500, 502, 503)
   serverError,
+  /// App configuration issues
   configuration,
+  /// Rate limiting and usage limits
   rateLimitExceeded,
+  /// Subscription and billing issues
   subscription,
+  /// Email confirmation required
   emailConfirmation,
+  /// Unknown or unexpected errors
   unknown,
 }
 
+/// Standardized error model for consistent error handling
 class AppError extends Equatable {
+  /// Type of error for categorization
   final ErrorType type;
+  
+  /// Error code for programmatic handling
   final String code;
+  
+  /// User-friendly error title
   final String title;
+  
+  /// User-friendly error message
   final String message;
+  
+  /// Technical details for debugging (optional)
   final String? technicalDetails;
+  
+  /// Suggested action for user to resolve error
   final String? suggestedAction;
+  
+  /// Whether this error can be retried
   final bool isRetryable;
+  
+  /// When the error occurred
   final DateTime timestamp;
 
+  /// Constructor with automatic timestamp
   AppError.withTimestamp({
     required this.type,
     required this.code,
@@ -34,6 +81,8 @@ class AppError extends Equatable {
   }) : timestamp = DateTime.now();
 
   // Factory constructors for common error types
+  
+  /// Create network connectivity error
   factory AppError.network({
     String? details,
   }) {
@@ -48,6 +97,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create authentication error
   factory AppError.authentication({
     String? details,
   }) {
@@ -62,6 +112,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create authorization error
   factory AppError.authorization({
     String? details,
   }) {
@@ -76,6 +127,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create validation error
   factory AppError.validation({
     required String field,
     String? details,
@@ -91,6 +143,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create server error
   factory AppError.serverError({
     String? details,
   }) {
@@ -105,6 +158,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create configuration error
   factory AppError.configuration({
     String? details,
   }) {
@@ -119,6 +173,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create rate limit error
   factory AppError.rateLimitExceeded({
     String? resetTime,
   }) {
@@ -133,6 +188,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create subscription error
   factory AppError.subscription({
     String? details,
   }) {
@@ -147,6 +203,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create email confirmation error
   factory AppError.emailConfirmation({
     String? details,
   }) {
@@ -161,6 +218,7 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create unknown error
   factory AppError.unknown({
     String? details,
   }) {
@@ -175,7 +233,8 @@ class AppError extends Equatable {
     );
   }
 
-  // Factory to create AppError from common exceptions
+  /// Factory to create AppError from common exceptions
+  /// Automatically categorizes exceptions based on their content
   factory AppError.fromException(dynamic exception) {
     final String exceptionString = exception.toString();
     

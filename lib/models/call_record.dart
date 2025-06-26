@@ -1,15 +1,52 @@
+/// CallRecord - Phone call activity tracking and management
+/// 
+/// This model represents individual phone call records including:
+/// - Call metadata (ID, user, phone number, topic)
+/// - Twilio integration (call SID, status tracking)
+/// - Call timing (initiation, answer, completion, duration)
+/// - Status tracking throughout call lifecycle
+/// 
+/// USAGE: Used throughout the app in:
+/// - phone_screen.dart: Call initiation and management
+/// - activity_history_screen.dart: Call history display
+/// - activity_record.dart: Unified activity tracking
+/// - api_service.dart: Call data operations
+/// - usage_tracking.dart: Call usage calculations
+/// 
+/// This model is CRITICAL for phone call functionality and provides
+/// detailed tracking of call attempts, success rates, and usage metrics.
 import 'package:equatable/equatable.dart';
 
+/// Represents a phone call record with complete lifecycle tracking
 class CallRecord extends Equatable {
+  /// Unique call identifier
   final String id;
+  
+  /// User ID who initiated the call
   final String? userId;
+  
+  /// Phone number that was called
   final String userPhoneNumber;
+  
+  /// Topic/subject of the call conversation
   final String topic;
+  
+  /// Twilio call SID for external service integration
   final String twilioCallSid;
-  final String status; // initiated, ringing, answered, completed, failed, no-answer, busy, canceled
+  
+  /// Current call status (initiated, ringing, answered, completed, failed, etc.)
+  final String status;
+  
+  /// When the call was initiated
   final DateTime createdAt;
+  
+  /// When the call was answered (if successful)
   final DateTime? answeredTime;
+  
+  /// When the call was completed (if successful)
   final DateTime? completedTime;
+  
+  /// Call duration in seconds (if completed)
   final int? durationSeconds;
 
   const CallRecord({
@@ -25,11 +62,18 @@ class CallRecord extends Equatable {
     this.durationSeconds,
   });
 
-  // Helper getters
+  // Helper getters for call status
+  
+  /// Whether the call was answered by the recipient
   bool get wasAnswered => answeredTime != null;
+  
+  /// Whether the call was successfully completed
   bool get wasCompleted => completedTime != null && status == 'completed';
+  
+  /// Whether the call was successful (answered and completed)
   bool get isSuccessful => wasAnswered && wasCompleted;
   
+  /// Helper getter for formatted duration display
   String get formattedDuration {
     if (durationSeconds == null || durationSeconds! <= 0) return '--:--';
     final minutes = durationSeconds! ~/ 60;
@@ -37,6 +81,7 @@ class CallRecord extends Equatable {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  /// Helper getter for human-readable status
   String get displayStatus {
     switch (status) {
       case 'completed':
@@ -60,6 +105,7 @@ class CallRecord extends Equatable {
     }
   }
 
+  /// Helper getter for formatted phone number display
   String get formattedPhoneNumber {
     // Format phone number as (XXX) XXX-XXXX for US numbers
     final cleanNumber = userPhoneNumber.replaceAll(RegExp(r'[^\d]'), '');
@@ -77,6 +123,7 @@ class CallRecord extends Equatable {
     return userPhoneNumber; // Return original if formatting fails
   }
 
+  /// Helper getter for formatted date display
   String get formattedDate {
     final now = DateTime.now();
     final difference = now.difference(createdAt);
@@ -96,6 +143,8 @@ class CallRecord extends Equatable {
     }
   }
 
+  /// Create CallRecord from JSON data
+  /// Expects data from the call_records table
   factory CallRecord.fromJson(Map<String, dynamic> json) {
     return CallRecord(
       id: json['id'].toString(),
@@ -115,6 +164,7 @@ class CallRecord extends Equatable {
     );
   }
 
+  /// Convert to JSON for storage
   Map<String, dynamic> toJson() {
     return {
       'id': id,

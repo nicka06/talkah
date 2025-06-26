@@ -5,6 +5,25 @@ import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../widgets/error_display_widget.dart';
 
+/**
+ * ForgotPasswordScreen - Password Reset Interface
+ * 
+ * This screen allows users to request a password reset email when they
+ * have forgotten their password. It provides a simple form interface
+ * for entering their email address and initiating the reset process.
+ * 
+ * Features:
+ * - Email input with validation
+ * - Password reset request functionality
+ * - Error handling and user feedback
+ * - Navigation back to login screen
+ * - Loading states during reset process
+ * 
+ * State Management:
+ * - Uses BLoC pattern for authentication state management
+ * - Listens to AuthBloc for password reset state changes
+ * - Dispatches AuthPasswordResetRequested event to AuthBloc
+ */
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
 
@@ -12,150 +31,158 @@ class ForgotPasswordScreen extends StatefulWidget {
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
+/**
+ * _ForgotPasswordScreenState - State management for ForgotPasswordScreen
+ * 
+ * Manages the UI state and user interactions for the password reset screen.
+ * Handles form validation, password reset requests, and navigation.
+ */
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  // Form validation key for email input
   final _formKey = GlobalKey<FormState>();
+  
+  // Text controller for email input field
   final _emailController = TextEditingController();
 
+  /**
+   * Cleanup method - Disposes of text controller to prevent memory leaks
+   */
   @override
   void dispose() {
     _emailController.dispose();
     super.dispose();
   }
 
-  void _sendResetLink() {
-    if (_formKey.currentState!.validate()) {
-      final email = _emailController.text.trim();
-      context.read<AuthBloc>().add(AuthPasswordResetRequested(email: email));
-    }
-  }
-
+  /**
+   * Main build method - Creates the password reset UI
+   * 
+   * The UI includes:
+   * - Screen title and instructions
+   * - Email input form with validation
+   * - Submit button for password reset request
+   * - Back button to return to login screen
+   * - Loading and success state handling
+   */
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final screenWidth = screenSize.width;
-    
     return Scaffold(
-      backgroundColor: Colors.red,
+      backgroundColor: Colors.red, // Consistent with app branding
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: (screenWidth * 0.07).clamp(24.0, 32.0)),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: BlocListener<AuthBloc, AuthState>(
+        // Listen to authentication state changes
         listener: (context, state) {
           if (state is AuthPasswordResetEmailSent) {
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                SnackBar(
-                  content: Text('Password reset link sent to your email.'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            Navigator.of(context).pop();
+            // Show success message when reset email is sent
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Password reset email sent! Check your inbox.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            Navigator.of(context).pop(); // Return to login screen
           } else if (state is AuthError) {
-             ErrorDisplayWidget.showNotification(context, state.error);
+            // Display error notifications when password reset fails
+            ErrorDisplayWidget.showNotification(context, state.error);
           }
         },
-        child: Center(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.08),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Reset Password',
-                      style: TextStyle(
-                        fontSize: (screenWidth * 0.09).clamp(28.0, 40.0),
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Title and instructions
+                  const Text(
+                    'Forgot Password?',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
                     ),
-                    SizedBox(height: screenSize.height * 0.02),
-                    Text(
-                      'Enter your email and we will send you a link to reset your password.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
-                        color: Colors.black87,
-                      ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Enter your email address and we\'ll send you a link to reset your password.',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
                     ),
-                    SizedBox(height: screenSize.height * 0.05),
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        labelStyle: TextStyle(
-                          color: Colors.black87,
-                          fontSize: (screenWidth * 0.035).clamp(12.0, 16.0),
-                        ),
-                        prefixIcon: Icon(
-                          Icons.email, 
-                          color: Colors.black87,
-                          size: (screenWidth * 0.055).clamp(20.0, 24.0),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.9),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                          borderSide: BorderSide(color: Colors.black, width: 2),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                          borderSide: BorderSide(color: Colors.black, width: 2),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(screenWidth * 0.03),
-                          borderSide: BorderSide(color: Colors.black, width: 3),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
-                      },
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  // Email input field with validation
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: Colors.white,
                     ),
-                    SizedBox(height: screenSize.height * 0.04),
-                    ElevatedButton(
-                      onPressed: _sendResetLink,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        minimumSize: Size(double.infinity, (screenSize.height * 0.06).clamp(45.0, 60.0)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Submit button for password reset request
+                  BlocBuilder<AuthBloc, AuthState>(
+                    builder: (context, state) {
+                      return ElevatedButton(
+                        onPressed: state is AuthLoading ? null : _submitResetRequest,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                      ),
-                      child: Text(
-                        'SEND RESET LINK',
-                        style: TextStyle(
-                          fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                        child: state is AuthLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                'Send Reset Link',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  /**
+   * Submits the password reset request
+   * 
+   * Validates the form and dispatches the AuthPasswordResetRequested
+   * event to the AuthBloc to initiate the password reset process.
+   */
+  void _submitResetRequest() {
+    if (_formKey.currentState!.validate()) {
+      context.read<AuthBloc>().add(
+        AuthPasswordResetRequested(email: _emailController.text.trim()),
+      );
+    }
   }
 } 

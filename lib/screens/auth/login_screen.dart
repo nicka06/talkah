@@ -7,6 +7,30 @@ import '../../blocs/auth/auth_state.dart';
 import '../../widgets/error_display_widget.dart';
 import 'forgot_password_screen.dart'; // Import the new screen
 
+/**
+ * LoginScreen - Main Authentication Interface
+ * 
+ * This screen serves as the primary authentication interface for the app.
+ * It provides a unified experience for both login and signup flows with
+ * multiple authentication methods:
+ * 
+ * Authentication Methods:
+ * - Email/Password login and signup
+ * - Google OAuth sign-in
+ * - Apple OAuth sign-in
+ * 
+ * UI Features:
+ * - Responsive design that adapts to different screen sizes
+ * - Graffiti-style branding with "TALKAH" logo
+ * - Toggle between login and signup modes
+ * - Form validation and error handling
+ * - Loading states and user feedback
+ * 
+ * State Management:
+ * - Uses BLoC pattern for authentication state management
+ * - Listens to AuthBloc for state changes
+ * - Dispatches authentication events to AuthBloc
+ */
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -14,14 +38,29 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+/**
+ * _LoginScreenState - State management for LoginScreen
+ * 
+ * Manages the UI state and user interactions for the authentication screen.
+ * Handles form validation, authentication method selection, and responsive
+ * layout calculations.
+ */
 class _LoginScreenState extends State<LoginScreen> {
+  // Form validation key for email/password forms
   final _formKey = GlobalKey<FormState>();
+  
+  // Text controllers for email and password input fields
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _showLogin = false; // Start with sign up view
-  bool _showEmailLoginForm = false; // Track if showing email login form
-  bool _showEmailSignUpForm = false; // Track if showing email signup form
+  
+  // UI state flags to control which view is displayed
+  bool _showLogin = false; // Controls whether to show login or signup mode
+  bool _showEmailLoginForm = false; // Shows email login form when true
+  bool _showEmailSignUpForm = false; // Shows email signup form when true
 
+  /**
+   * Cleanup method - Disposes of text controllers to prevent memory leaks
+   */
   @override
   void dispose() {
     _emailController.dispose();
@@ -29,31 +68,45 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /**
+   * Main build method - Creates the responsive authentication UI
+   * 
+   * The UI is structured in three main sections:
+   * 1. Top Section: Talkah branding and logo
+   * 2. Middle Section: Authentication buttons and forms
+   * 3. Bottom Section: Toggle between login and signup modes
+   * 
+   * The layout uses responsive scaling based on screen dimensions
+   * to ensure consistent appearance across different devices.
+   */
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final screenWidth = screenSize.width;
     final screenHeight = screenSize.height;
     
-    // Responsive scaling based on screen width
+    // Responsive scaling calculations for consistent UI across devices
     final double fontScale = screenWidth / 375; // Base width of iPhone 12
     final double sizeScale = (screenWidth + screenHeight) / 1200; // Combined scaling
     
     return Scaffold(
-      backgroundColor: Colors.red, // Full red background
+      backgroundColor: Colors.red, // Full red background for brand consistency
       body: SingleChildScrollView(
         child: BlocListener<AuthBloc, AuthState>(
+          // Listen to all authentication state changes
           listenWhen: (previous, current) {
             if (kDebugMode) {
               debugPrint('🎭 LOGIN BlocListener.listenWhen: ${previous.runtimeType} -> ${current.runtimeType}');
             }
             return true;
           },
+          // Handle authentication state changes
           listener: (context, state) {
             if (kDebugMode) {
               debugPrint('🎪 LOGIN BlocListener triggered: ${state.runtimeType}');
             }
             
+            // Display error notifications when authentication fails
             if (state is AuthError) {
               ErrorDisplayWidget.showNotification(context, state.error);
             }
@@ -63,40 +116,41 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SafeArea(
               child: Padding(
                 padding: EdgeInsets.symmetric(
-                  horizontal: screenWidth * 0.08, // 8% of screen width
-                  vertical: screenHeight * 0.03,  // 3% of screen height
+                  horizontal: screenWidth * 0.08, // 8% of screen width for margins
+                  vertical: screenHeight * 0.03,  // 3% of screen height for margins
                 ),
                 child: Column(
                   children: [
-                    // Top Section - Talkah Branding
+                    // Top Section - Talkah Branding and Logo
                     Expanded(
                       flex: 2,
                       child: Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Graffiti-style Talkah Text - Responsive
+                            // Graffiti-style Talkah Text with responsive sizing
                             Text(
                               'TALKAH',
                               style: TextStyle(
-                                fontSize: (screenWidth * 0.17).clamp(32.0, 90.0), // Reduced from 18% to 12%, max 60
+                                fontSize: (screenWidth * 0.17).clamp(32.0, 90.0), // Responsive font size with limits
                                 fontWeight: FontWeight.w900,
                                 color: Colors.black,
-                                letterSpacing: screenWidth * 0.01, // 1% of width
+                                letterSpacing: screenWidth * 0.01, // Responsive letter spacing
                                 shadows: [
+                                  // White shadow for depth
                                   Shadow(
                                     offset: Offset(sizeScale * 3, sizeScale * 3),
                                     blurRadius: 0,
                                     color: Colors.white.withOpacity(0.3),
                                   ),
+                                  // Black shadow for contrast
                                   Shadow(
                                     offset: Offset(-sizeScale, -sizeScale),
                                     blurRadius: 0,
                                     color: Colors.black.withOpacity(0.5),
                                   ),
                                 ],
-                                // Using built-in fonts for now, can replace with graffiti font later
-                                fontFamily: 'Arial Black',
+                                fontFamily: 'Arial Black', // Bold font for graffiti effect
                               ),
                             ),
                           ],
@@ -104,13 +158,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     
-                    // Middle Section - Auth Buttons
+                    // Middle Section - Authentication Buttons and Forms
                     Expanded(
                       flex: 3,
                       child: !_showLogin ? _buildSignUpSection(screenSize, fontScale) : _buildLoginSection(screenSize, fontScale),
                     ),
                     
-                    // Bottom Section - Switch between sign up and login
+                    // Bottom Section - Toggle between signup and login modes
                     _buildBottomToggle(screenSize, fontScale),
                   ],
                 ),
@@ -122,27 +176,38 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /**
+   * Builds the signup section with authentication method options
+   * 
+   * This section shows either:
+   * 1. Authentication method buttons (Email, Google, Apple)
+   * 2. Email signup form when user selects email option
+   * 
+   * @param screenSize - Current screen dimensions
+   * @param fontScale - Responsive font scaling factor
+   * @return Widget - The signup section UI
+   */
   Widget _buildSignUpSection(Size screenSize, double fontScale) {
     final screenWidth = screenSize.width;
     final screenHeight = screenSize.height;
     
     if (!_showEmailSignUpForm) {
-      // Show signup button options
+      // Show signup button options for different authentication methods
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             'SIGN UP WITH',
             style: TextStyle(
-              fontSize: (screenWidth * 0.045).clamp(14.0, 20.0), // 4.5% of width
+              fontSize: (screenWidth * 0.045).clamp(14.0, 20.0), // Responsive font size
               fontWeight: FontWeight.bold,
               color: Colors.black,
-              letterSpacing: screenWidth * 0.004, // 0.4% of width
+              letterSpacing: screenWidth * 0.004, // Responsive letter spacing
             ),
           ),
-          SizedBox(height: screenHeight * 0.04), // 4% of height
+          SizedBox(height: screenHeight * 0.04), // Spacing between title and buttons
           
-          // Email Sign Up Button
+          // Email Sign Up Button - Opens email signup form
           _buildAuthButton(
             icon: Icons.email,
             text: 'EMAIL',
@@ -153,9 +218,9 @@ class _LoginScreenState extends State<LoginScreen> {
             fontScale: fontScale,
           ),
           
-          SizedBox(height: screenHeight * 0.02), // 2% of height
+          SizedBox(height: screenHeight * 0.02), // Spacing between buttons
           
-          // Google Sign Up Button
+          // Google Sign Up Button - Initiates Google OAuth flow
           _buildAuthButton(
             icon: Icons.g_mobiledata,
             text: 'GOOGLE',
@@ -166,9 +231,9 @@ class _LoginScreenState extends State<LoginScreen> {
             fontScale: fontScale,
           ),
           
-          SizedBox(height: screenHeight * 0.02), // 2% of height
+          SizedBox(height: screenHeight * 0.02), // Spacing between buttons
           
-          // Apple Sign Up Button
+          // Apple Sign Up Button - Initiates Apple OAuth flow
           _buildAuthButton(
             icon: Icons.apple,
             text: 'APPLE',
@@ -181,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       );
     } else {
-      // Show email signup form
+      // Show email signup form with validation
       return SingleChildScrollView(
         child: Form(
           key: _formKey,
@@ -191,13 +256,13 @@ class _LoginScreenState extends State<LoginScreen> {
               Text(
                 'SIGN UP',
                 style: TextStyle(
-                  fontSize: (screenWidth * 0.06).clamp(18.0, 26.0), // 6% of width
+                  fontSize: (screenWidth * 0.06).clamp(18.0, 26.0), // Responsive font size
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
-                  letterSpacing: screenWidth * 0.005, // 0.5% of width
+                  letterSpacing: screenWidth * 0.005, // Responsive letter spacing
                 ),
               ),
-              SizedBox(height: screenHeight * 0.04), // 4% of height
+              SizedBox(height: screenHeight * 0.04), // Spacing after title
               
               // Email Field
               TextFormField(

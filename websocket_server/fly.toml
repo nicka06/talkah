@@ -1,46 +1,89 @@
-# fly.toml app configuration file for websocket-server-ancient-shape-3559
+# Fly.io Deployment Configuration for WebSocket Server
+# 
+# This configuration file defines how the WebSocket server is deployed on Fly.io.
+# The server handles real-time AI voice conversations with support for both
+# HTTP webhooks (Twilio) and WebSocket connections (voice streaming).
+# 
+# Deployment Features:
+# - Rolling deployment strategy for zero-downtime updates
+# - Health checks for automatic failover
+# - SSL/TLS termination for secure connections
+# - Connection concurrency limits for resource management
+# - Multi-region deployment support
+
+# Application name and primary region
+# The app name must be unique across all Fly.io applications
 app = "websocket-server-ancient-shape-3559"
+# Primary region for deployment (iad = Washington DC)
 primary_region = "iad"
 
+# Machine configuration
+# Shared CPU with 1x resources for cost optimization
 [machines]
   size = "shared-cpu-1x"
 
+# Deployment strategy
+# Rolling deployment ensures zero downtime during updates
 [deploy]
   strategy = "rolling"
+  # Minimum machines ensures service availability
   min_machines_running = 1
 
+# HTTP Service Configuration
 # This service handles HTTP requests on port 80 and redirects them to HTTPS.
+# Used for Twilio webhooks and health checks.
 [[services]]
+  # Internal port where the Node.js server listens
   internal_port = 8080
   protocol = "tcp"
   processes = ["app"]
  
+  # External port configuration
   [[services.ports]]
+    # External port 80 (HTTP)
     port = 80
     handlers = ["http"]
+    # Automatically redirect HTTP to HTTPS for security
     force_https = true
 
+# WebSocket and HTTPS Service Configuration
 # This service handles secure WebSocket (WSS) and HTTPS traffic on port 443.
+# Used for real-time voice streaming and secure API access.
 [[services]]
+  # Internal port where the Node.js server listens
   internal_port = 8080
   protocol = "tcp"
   processes = ["app"]
 
+  # External port configuration
   [[services.ports]]
+    # External port 443 (HTTPS/WSS)
     port = 443
+    # TLS for encryption, HTTP for API endpoints
     handlers = ["tls", "http"]
   
+  # Health check configuration
+  # Monitors server health and triggers automatic failover if needed
   [[services.checks]]
     type = "http"
+    # Check every 10 seconds
     interval = "10s"
+    # 5 second timeout for health check
     timeout = "5s"
+    # 20 second grace period before marking unhealthy
     grace_period = "20s"
     method = "get"
+    # Health check endpoint defined in main.js
     path = "/health"
     protocol = "http"
     port = 8080
 
+  # Connection concurrency limits
+  # Prevents resource exhaustion and ensures fair usage
   [services.concurrency]
+    # Hard limit: maximum 25 concurrent connections
     hard_limit = 25
+    # Soft limit: target 20 concurrent connections
     soft_limit = 20
+    # Limit type: based on active connections
     type = "connections"

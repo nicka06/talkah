@@ -1,15 +1,53 @@
+/// SmsRecord - SMS/text message activity tracking and management
+/// 
+/// This model represents individual SMS records including:
+/// - SMS metadata (ID, user, phone number, message text)
+/// - Message direction (inbound, outbound)
+/// - Message type classification (single, ai_conversation)
+/// - Twilio integration (message SID, status tracking)
+/// - SMS status throughout delivery lifecycle
+/// 
+/// USAGE: Used throughout the app in:
+/// - sms_screen.dart: SMS composition and sending
+/// - activity_history_screen.dart: SMS history display
+/// - activity_record.dart: Unified activity tracking
+/// - api_service.dart: SMS data operations
+/// - usage_tracking.dart: SMS usage calculations
+/// 
+/// This model is CRITICAL for SMS functionality and provides
+/// detailed tracking of message attempts, delivery status, and usage metrics.
 import 'package:equatable/equatable.dart';
 
+/// Represents an SMS record with complete delivery tracking
 class SmsRecord extends Equatable {
+  /// Unique SMS identifier
   final String id;
+  
+  /// User ID who sent/received the SMS
   final String? userId;
+  
+  /// Phone number for the SMS
   final String phoneNumber;
+  
+  /// SMS message content
   final String messageText;
-  final String direction; // inbound, outbound
-  final String type; // single, ai_conversation
-  final String status; // sent, failed, pending
+  
+  /// Message direction (inbound, outbound)
+  final String direction;
+  
+  /// Message type (single, ai_conversation)
+  final String type;
+  
+  /// Current SMS status (sent, failed, pending)
+  final String status;
+  
+  /// Twilio message SID for external service integration
   final String? twilioMessageSid;
+  
+  /// Conversation ID for multi-message conversations
   final String? conversationId;
+  
+  /// When the SMS was created/sent
   final DateTime createdAt;
 
   const SmsRecord({
@@ -25,11 +63,18 @@ class SmsRecord extends Equatable {
     required this.createdAt,
   });
 
-  // Helper getters
+  // Helper getters for SMS status
+  
+  /// Whether the SMS was successfully sent
   bool get wasSuccessful => status == 'sent';
+  
+  /// Whether the SMS was outbound (sent by user)
   bool get isOutbound => direction == 'outbound';
+  
+  /// Whether the SMS was part of an AI conversation
   bool get isAiConversation => type == 'ai_conversation';
   
+  /// Helper getter for formatted phone number display
   String get formattedPhoneNumber {
     // Format phone number as (XXX) XXX-XXXX for US numbers
     final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
@@ -47,6 +92,7 @@ class SmsRecord extends Equatable {
     return phoneNumber; // Return original if formatting fails
   }
   
+  /// Helper getter for human-readable status
   String get displayStatus {
     switch (status) {
       case 'sent':
@@ -60,6 +106,7 @@ class SmsRecord extends Equatable {
     }
   }
 
+  /// Helper getter for formatted date display
   String get formattedDate {
     final now = DateTime.now();
     final difference = now.difference(createdAt);
@@ -79,11 +126,14 @@ class SmsRecord extends Equatable {
     }
   }
 
+  /// Helper getter for shortened message display
   String get shortMessage {
     if (messageText.length <= 50) return messageText;
     return '${messageText.substring(0, 47)}...';
   }
 
+  /// Create SmsRecord from JSON data
+  /// Expects data from the sms_records table
   factory SmsRecord.fromJson(Map<String, dynamic> json) {
     return SmsRecord(
       id: json['id'].toString(),
@@ -99,6 +149,7 @@ class SmsRecord extends Equatable {
     );
   }
 
+  /// Convert to JSON for storage
   Map<String, dynamic> toJson() {
     return {
       'id': id,

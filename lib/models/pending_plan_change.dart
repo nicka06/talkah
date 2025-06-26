@@ -1,12 +1,34 @@
+/// PendingPlanChange - Scheduled subscription plan changes
+/// 
+/// This model represents plan changes that are scheduled to take effect
+/// at the end of the current billing period. It handles:
+/// - Upgrades (free -> pro, pro -> premium)
+/// - Downgrades (premium -> pro, pro -> free)
+/// - Billing interval switches (monthly <-> yearly)
+/// 
+/// USAGE: Used throughout the app in:
+/// - subscription_status.dart: Part of user's subscription state
+/// - subscription_screen.dart: Display pending changes to user
+/// - subscription_bloc.dart: Manage pending change operations
+/// - payment_screen.dart: Handle plan change requests
+/// - api_service.dart: Database operations for pending changes
+/// 
+/// This model is IMPORTANT for providing users with visibility into
+/// scheduled changes and managing the transition between plans.
 import 'package:equatable/equatable.dart';
 
 /// Represents a scheduled plan change (upgrade, downgrade, or billing switch)
 /// This is used when a user has requested a plan change that will take effect
 /// at the end of their current billing period
 class PendingPlanChange extends Equatable {
+  /// Target plan ID that the user will be moved to
   final String targetPlanId;
+  
+  /// Date when the plan change will take effect
   final DateTime effectiveDate;
-  final String changeType; // 'upgrade', 'downgrade', 'switch'
+  
+  /// Type of change (upgrade, downgrade, switch)
+  final String changeType;
 
   const PendingPlanChange({
     required this.targetPlanId,

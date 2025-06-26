@@ -1,15 +1,46 @@
+/// SubscriptionStatus - Comprehensive subscription state management
+/// 
+/// This model represents the complete state of a user's subscription including:
+/// - Current plan (free, pro, premium)
+/// - Billing status (active, past_due, canceled, trialing)
+/// - Billing cycle information (start/end dates, interval)
+/// - Stripe customer integration
+/// - Pending plan changes (upgrades, downgrades, billing switches)
+/// 
+/// USAGE: Used extensively throughout the app in:
+/// - subscription_bloc.dart: Subscription state management
+/// - subscription_screen.dart: Display subscription information
+/// - payment_screen.dart: Payment processing and plan changes
+/// - auth_bloc.dart: User profile with subscription data
+/// - api_service.dart: Database operations for subscription data
+/// 
+/// This is a CRITICAL model that serves as the single source of truth
+/// for all subscription-related functionality in the app.
 import 'package:equatable/equatable.dart';
 import 'pending_plan_change.dart';
 
 /// Represents the user's current subscription status
 /// This includes their current plan, billing information, and any pending changes
 class SubscriptionStatus extends Equatable {
+  /// Current subscription plan ID (free, pro, premium)
   final String planId;
+  
+  /// Current subscription status (active, past_due, canceled, trialing)
   final String status;
+  
+  /// Start date of current billing cycle
   final DateTime? billingCycleStart;
+  
+  /// End date of current billing cycle
   final DateTime? billingCycleEnd;
+  
+  /// Billing interval (monthly, yearly)
   final String billingInterval;
+  
+  /// Stripe customer ID for payment processing
   final String? stripeCustomerId;
+  
+  /// Pending plan change scheduled for next billing cycle
   final PendingPlanChange? pendingChange;
 
   const SubscriptionStatus({

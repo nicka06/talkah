@@ -11,39 +11,75 @@ import 'auth_event.dart';
 import 'auth_state.dart';
 import 'package:flutter/foundation.dart';
 
+/**
+ * AuthBloc - Central Authentication State Management
+ * 
+ * This class manages all authentication-related state and operations for the app.
+ * It handles user login, signup, logout, OAuth providers (Google/Apple), password
+ * management, and real-time authentication state changes.
+ * 
+ * Key Responsibilities:
+ * - Listen to Supabase auth state changes
+ * - Manage user authentication flow
+ * - Handle OAuth sign-in (Google, Apple)
+ * - Update user profile information
+ * - Manage password reset functionality
+ * - Provide real-time auth state to UI
+ */
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
+  // Stream subscription to listen for auth state changes from Supabase
   late StreamSubscription<AuthState> _authStateSubscription;
+  
+  // Service for handling and formatting errors consistently
   final ErrorHandlerService _errorHandler = ErrorHandlerService();
 
+  /**
+   * Constructor - Sets up the authentication system
+   * 
+   * 1. Initializes the bloc with AuthInitial state
+   * 2. Sets up a listener for real-time auth state changes from Supabase
+   * 3. Registers event handlers for all authentication operations
+   */
   AuthBloc() : super(AuthInitial()) {
     if (kDebugMode) {
       debugPrint('🏗️ AuthBloc: Constructor - setting up auth stream...');
     }
     
-    // Listen to auth state changes
+    // Set up real-time listener for authentication state changes
+    // This ensures the app stays in sync with Supabase auth state
     _authStateSubscription = _authStateChangeStream().listen(
       (authState) {
         if (kDebugMode) {
           debugPrint('🌊 AuthBloc: Auth stream triggered: ${authState.runtimeType}');
         }
+        // Trigger user data update whenever auth state changes
         add(AuthUserUpdated(
           userId: authState is AuthAuthenticated ? authState.user.id : null,
         ));
       },
     );
 
-    on<AuthCheckRequested>(_onAuthCheckRequested);
-    on<AuthLoginRequested>(_onAuthLoginRequested);
-    on<AuthSignupRequested>(_onAuthSignupRequested);
-    on<AuthLogoutRequested>(_onAuthLogoutRequested);
-    on<AuthUserUpdated>(_onAuthUserUpdated);
-    on<AuthUpdateEmailRequested>(_onAuthUpdateEmailRequested);
-    on<AuthUpdatePasswordRequested>(_onAuthUpdatePasswordRequested);
-    on<AuthGoogleSignInRequested>(_onAuthGoogleSignInRequested);
-    on<AuthAppleSignInRequested>(_onAuthAppleSignInRequested);
-    on<AuthPasswordResetRequested>(_onAuthPasswordResetRequested);
+    // Register event handlers for all authentication operations
+    on<AuthCheckRequested>(_onAuthCheckRequested);           // Check if user is logged in
+    on<AuthLoginRequested>(_onAuthLoginRequested);           // Email/password login
+    on<AuthSignupRequested>(_onAuthSignupRequested);         // Create new account
+    on<AuthLogoutRequested>(_onAuthLogoutRequested);         // Sign out user
+    on<AuthUserUpdated>(_onAuthUserUpdated);                 // Update user data
+    on<AuthUpdateEmailRequested>(_onAuthUpdateEmailRequested); // Change email
+    on<AuthUpdatePasswordRequested>(_onAuthUpdatePasswordRequested); // Change password
+    on<AuthGoogleSignInRequested>(_onAuthGoogleSignInRequested); // Google OAuth
+    on<AuthAppleSignInRequested>(_onAuthAppleSignInRequested); // Apple OAuth
+    on<AuthPasswordResetRequested>(_onAuthPasswordResetRequested); // Reset password
   }
 
+  /**
+   * Creates a stream that listens to Supabase authentication state changes
+   * 
+   * This stream converts Supabase auth events into our app's AuthState objects.
+   * It handles different auth events like login, logout, password recovery, etc.
+   * 
+   * Returns: Stream<AuthState> - Stream of authentication states
+   */
   Stream<AuthState> _authStateChangeStream() {
     return SupabaseConfig.auth.onAuthStateChange.map((data) {
       if (kDebugMode) {
@@ -53,10 +89,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       
       final session = data.session;
       
+      // Handle password recovery flow specifically
       if (data.event == supabase.AuthChangeEvent.passwordRecovery) {
         return AuthPasswordRecovery(session?.accessToken);
       }
       
+      // If session exists, user is authenticated
       if (session != null) {
         return AuthAuthenticated(
           user: UserModel(
@@ -68,11 +106,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ),
         );
       } else {
+        // No session means user is not authenticated
         return AuthUnauthenticated();
       }
     });
   }
 
+  /**
+   * Event Handler: Check if user is currently authenticated
+   * 
+   * This is typically called when the app starts to determine if the user
+   * should see the login screen or the main app interface.
+   * 
+   * Process:
+   * 1. Check if there's a current session in Supabase
+   * 2. If session exists, fetch complete user profile from database
+   * 3. Emit appropriate state (authenticated or unauthenticated)
+   */
   Future<void> _onAuthCheckRequested(
     AuthCheckRequested event,
     Emitter<AuthState> emit,
@@ -82,7 +132,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       final session = SupabaseConfig.auth.currentSession;
       if (session != null) {
-        // Fetch full user profile from database
+        // User has an active session, fetch their complete profile
         final userResponse = await SupabaseConfig.client
             .from('users')
             .select()
@@ -92,6 +142,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final user = UserModel.fromJson(userResponse);
         emit(AuthAuthenticated(user: user));
       } else {
+        // No active session, user is not logged in
         emit(AuthUnauthenticated());
       }
     } catch (e) {
@@ -100,6 +151,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Email and password login
+   * 
+   * Authenticates user with email and password using Supabase.
+   * After successful authentication, fetches the user's complete profile
+   * from the database to get subscription status and other user data.
+   * 
+   * Process:
+   * 1. Call Supabase signInWithPassword
+   * 2. If successful, fetch user profile from database
+   * 3. Emit authenticated state with complete user data
+   */
   Future<void> _onAuthLoginRequested(
     AuthLoginRequested event,
     Emitter<AuthState> emit,
@@ -115,6 +178,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         debugPrint('🔐 AuthBloc: Calling signInWithPassword...');
       }
       
+      // Authenticate with Supabase using email and password
       final response = await SupabaseConfig.auth.signInWithPassword(
         email: event.email,
         password: event.password,
@@ -131,7 +195,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           debugPrint('🔐 AuthBloc: User exists, fetching profile...');
         }
         
-        // Fetch full user profile from database
+        // Fetch complete user profile from database (includes subscription info)
         final userResponse = await SupabaseConfig.client
             .from('users')
             .select()
@@ -174,6 +238,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Create new user account
+   * 
+   * Creates a new user account with email and password.
+   * The user profile is automatically created by a database trigger
+   * when the user signs up through Supabase.
+   * 
+   * Process:
+   * 1. Call Supabase signUp
+   * 2. Wait for database trigger to create user profile
+   * 3. Fetch the created profile and emit authenticated state
+   */
   Future<void> _onAuthSignupRequested(
     AuthSignupRequested event,
     Emitter<AuthState> emit,
@@ -181,6 +257,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
     
     try {
+      // Create new user account in Supabase
       final response = await SupabaseConfig.auth.signUp(
         email: event.email,
         password: event.password,
@@ -191,7 +268,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         // Wait a moment for the trigger to complete
         await Future.delayed(const Duration(milliseconds: 500));
         
-        // Fetch the created user profile
+        // Fetch the created user profile from database
         final userResponse = await SupabaseConfig.client
             .from('users')
             .select()
@@ -211,6 +288,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Sign out user
+   * 
+   * Signs out the user from all authentication providers (Google, Apple, Supabase)
+   * and clears the authentication state.
+   * 
+   * Process:
+   * 1. Sign out from OAuth providers (Google, Apple)
+   * 2. Sign out from Supabase
+   * 3. Emit unauthenticated state
+   */
   Future<void> _onAuthLogoutRequested(
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
@@ -228,6 +316,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Update user data when auth state changes
+   * 
+   * This is triggered by the auth state stream whenever Supabase reports
+   * a change in authentication status. It ensures the app has the most
+   * up-to-date user information from the database.
+   * 
+   * Process:
+   * 1. If user ID exists, fetch latest user profile from database
+   * 2. If no user ID, emit unauthenticated state
+   * 3. Handle any errors during the fetch process
+   */
   Future<void> _onAuthUserUpdated(
     AuthUserUpdated event,
     Emitter<AuthState> emit,
@@ -243,6 +343,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           debugPrint('👤 AuthBloc: Fetching user data for ${event.userId}');
         }
         
+        // Fetch latest user profile from database
         final userResponse = await SupabaseConfig.client
             .from('users')
             .select()
@@ -273,12 +374,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Cleanup method - Called when the bloc is disposed
+   * 
+   * Cancels the auth state subscription to prevent memory leaks
+   */
   @override
   Future<void> close() {
     _authStateSubscription.cancel();
     return super.close();
   }
 
+  /**
+   * Event Handler: Update user's email address
+   * 
+   * Allows authenticated users to change their email address.
+   * This requires the user to be currently authenticated.
+   * 
+   * Process:
+   * 1. Verify user is authenticated
+   * 2. Call API service to update email
+   * 3. Refresh user data from database
+   * 4. Emit updated authenticated state
+   */
   Future<void> _onAuthUpdateEmailRequested(
     AuthUpdateEmailRequested event,
     Emitter<AuthState> emit,
@@ -311,6 +429,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Update user's password
+   * 
+   * Allows users to change their password. This can be used both for
+   * authenticated users changing their password and for password recovery.
+   * 
+   * Process:
+   * 1. Call Supabase to update password
+   * 2. If successful, fetch updated user profile
+   * 3. Emit authenticated state with updated user data
+   */
   Future<void> _onAuthUpdatePasswordRequested(
     AuthUpdatePasswordRequested event,
     Emitter<AuthState> emit,
@@ -344,6 +473,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Google OAuth Sign-In
+   * 
+   * Handles authentication using Google OAuth. This creates a more seamless
+   * login experience for users who prefer to use their Google account.
+   * 
+   * Process:
+   * 1. Call OAuth service to authenticate with Google
+   * 2. Wait for Supabase triggers to complete user profile creation
+   * 3. Fetch or create user profile in database
+   * 4. Emit authenticated state with user data
+   */
   Future<void> _onAuthGoogleSignInRequested(
     AuthGoogleSignInRequested event,
     Emitter<AuthState> emit,
@@ -431,6 +572,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Apple OAuth Sign-In
+   * 
+   * Handles authentication using Apple Sign-In. This is required for iOS apps
+   * that offer other OAuth providers, and provides a privacy-focused login option.
+   * 
+   * Process:
+   * 1. Call OAuth service to authenticate with Apple
+   * 2. Wait for Supabase triggers to complete user profile creation
+   * 3. Fetch or create user profile in database
+   * 4. Emit authenticated state with user data
+   */
   Future<void> _onAuthAppleSignInRequested(
     AuthAppleSignInRequested event,
     Emitter<AuthState> emit,
@@ -518,6 +671,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /**
+   * Event Handler: Send password reset email
+   * 
+   * Initiates the password reset process by sending an email to the user
+   * with a link to reset their password.
+   * 
+   * Process:
+   * 1. Call Supabase to send password reset email
+   * 2. Emit success state
+   * 3. Return to current authentication state
+   */
   Future<void> _onAuthPasswordResetRequested(
     AuthPasswordResetRequested event,
     Emitter<AuthState> emit,

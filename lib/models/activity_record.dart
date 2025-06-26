@@ -1,19 +1,61 @@
+/// ActivityRecord - Unified activity tracking across all communication types
+/// 
+/// This model provides a unified interface for displaying user activity
+/// across different communication types (calls, emails, SMS). It includes:
+/// - Common activity metadata (ID, type, timestamps, status)
+/// - Type-specific data through optional record references
+/// - Formatted display information for UI
+/// 
+/// USAGE: Used throughout the app in:
+/// - activity_history_screen.dart: Display unified activity feed
+/// - activity_bloc.dart: Activity state management
+/// - dashboard_screen.dart: Recent activity display
+/// - api_service.dart: Activity data operations
+/// 
+/// This model is USEFUL for providing a consistent activity experience
+/// across different communication types in the UI.
 import 'package:equatable/equatable.dart';
 import 'call_record.dart';
 import 'email_record.dart';
 import 'sms_record.dart';
 
-enum ActivityType { call, email, sms }
+/// Enumeration of activity types for categorization
+enum ActivityType { 
+  /// Phone call activities
+  call, 
+  /// Email activities
+  email, 
+  /// SMS/text activities
+  sms 
+}
 
+/// Unified activity record for displaying user communication history
 class ActivityRecord extends Equatable {
+  /// Unique activity identifier
   final String id;
+  
+  /// Type of activity (call, email, sms)
   final ActivityType type;
+  
+  /// When the activity occurred
   final DateTime createdAt;
+  
+  /// Activity status (success, failed, pending)
   final String status;
-  final String mainText; // Phone number, email address, or phone number for SMS
-  final String secondaryText; // Topic, subject, or message preview
+  
+  /// Primary display text (phone number, email address)
+  final String mainText;
+  
+  /// Secondary display text (topic, subject, message preview)
+  final String secondaryText;
+  
+  /// Detailed call record (if type is call)
   final CallRecord? callRecord;
+  
+  /// Detailed email record (if type is email)
   final EmailRecord? emailRecord;
+  
+  /// Detailed SMS record (if type is sms)
   final SmsRecord? smsRecord;
 
   const ActivityRecord({
@@ -28,7 +70,7 @@ class ActivityRecord extends Equatable {
     this.smsRecord,
   });
 
-  // Helper getters
+  /// Helper getter to check if activity was successful
   bool get wasSuccessful {
     switch (type) {
       case ActivityType.call:
@@ -40,6 +82,7 @@ class ActivityRecord extends Equatable {
     }
   }
 
+  /// Helper getter for formatted date display
   String get formattedDate {
     final now = DateTime.now();
     final difference = now.difference(createdAt);
@@ -59,6 +102,7 @@ class ActivityRecord extends Equatable {
     }
   }
 
+  /// Helper getter for display status
   String get displayStatus {
     switch (type) {
       case ActivityType.call:
@@ -70,6 +114,7 @@ class ActivityRecord extends Equatable {
     }
   }
 
+  /// Helper getter for detail text
   String get detailText {
     switch (type) {
       case ActivityType.call:
@@ -82,6 +127,8 @@ class ActivityRecord extends Equatable {
   }
 
   // Factory constructors for each type
+  
+  /// Create ActivityRecord from CallRecord
   factory ActivityRecord.fromCall(CallRecord call) {
     return ActivityRecord(
       id: call.id,
@@ -94,6 +141,7 @@ class ActivityRecord extends Equatable {
     );
   }
 
+  /// Create ActivityRecord from EmailRecord
   factory ActivityRecord.fromEmail(EmailRecord email) {
     return ActivityRecord(
       id: email.id,
@@ -106,6 +154,7 @@ class ActivityRecord extends Equatable {
     );
   }
 
+  /// Create ActivityRecord from SmsRecord
   factory ActivityRecord.fromSms(SmsRecord sms) {
     return ActivityRecord(
       id: sms.id,

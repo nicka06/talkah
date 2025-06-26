@@ -7,12 +7,40 @@ const axios = require('axios');
 const crypto = require('crypto');
 const querystring = require('querystring');
 
+/**
+ * WebSocket Server for Real-Time AI Communication
+ * 
+ * This server handles real-time voice conversations between users and AI assistants.
+ * It integrates multiple AI services to provide a complete voice communication experience:
+ * 
+ * Core Features:
+ * - Real-time WebSocket connections for voice streaming
+ * - Speech-to-Text (STT) using Google Cloud Speech API
+ * - Text-to-Speech (TTS) using ElevenLabs API
+ * - AI conversation handling using OpenAI GPT-4
+ * - Call duration management and limits
+ * - Integration with Supabase for data persistence
+ * - Twilio integration for phone call handling
+ * 
+ * Architecture:
+ * - WebSocket server for real-time communication
+ * - HTTP server for Twilio webhook endpoints
+ * - Multiple AI service integrations
+ * - Call state management and cleanup
+ */
+
 const PORT = process.env.PORT || 8080;
 const WEBSOCKET_URL = process.env.EXTERNAL_WEBSOCKET_SERVICE_URL || `ws://localhost:${PORT}`;
 
 // --- API Client Initialization ---
 
-// Supabase
+/**
+ * Supabase Client Setup
+ * 
+ * Initializes the Supabase client for database operations.
+ * Uses service role key for elevated permissions to manage user data,
+ * call records, and conversation history.
+ */
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -23,7 +51,13 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 console.log("Supabase client initialized.");
 
-// Google Cloud STT
+/**
+ * Google Cloud Speech-to-Text Client Setup
+ * 
+ * Initializes the Google Cloud Speech client for converting audio to text.
+ * Uses JSON credentials stored in environment variables for authentication.
+ * This service is critical for understanding user speech during calls.
+ */
 let speechClient = null;
 try {
     console.log("Attempting to initialize Google SpeechClient...");
@@ -41,7 +75,13 @@ try {
     console.error("CRITICAL: Failed to initialize Google SpeechClient. STT will be disabled.", error);
 }
 
-// OpenAI
+/**
+ * OpenAI Client Setup
+ * 
+ * Initializes the OpenAI client for AI conversation handling.
+ * Uses GPT-4o-mini model for generating intelligent responses to user input.
+ * This is the core AI brain of the conversation system.
+ */
 let openai;
 try {
     console.log("Attempting to initialize OpenAI client...");
@@ -57,7 +97,13 @@ try {
     console.error("CRITICAL: Failed to initialize OpenAI client.", error);
 }
 
-// ElevenLabs
+/**
+ * ElevenLabs API Key Setup
+ * 
+ * Configures the ElevenLabs API key for Text-to-Speech functionality.
+ * This service converts AI responses back to natural-sounding speech.
+ * Uses a specific voice ID for consistent AI voice across conversations.
+ */
 const ELEVENLABS_API_KEY = process.env.ElevenLabs_Key;
 if (!ELEVENLABS_API_KEY) {
     console.warn("ElevenLabs_Key is not set. TTS will be disabled.");
@@ -65,17 +111,46 @@ if (!ELEVENLABS_API_KEY) {
     console.log("ElevenLabs API key found.");
 }
 
-// --- Globals ---
+// --- Global State Management ---
 
+/**
+ * Active Connections Map
+ * 
+ * Tracks all active WebSocket connections and their associated data:
+ * - WebSocket instance
+ * - Call metadata (CallSID, user info)
+ * - Conversation history
+ * - Call timers and state flags
+ * - Active TTS streams
+ */
 const activeConnections = new Map();
+
+/**
+ * Call Duration Limits Configuration
+ * 
+ * Defines time-based limits for call management:
+ * - SOFT_WARNING: 2.5 minutes - gentle wrap-up prompt
+ * - URGENT_WARNING: 2.83 minutes - urgent finish prompt  
+ * - HARD_CUTOFF: 3 minutes - forced call termination
+ */
 const CALL_DURATION_LIMITS = {
   SOFT_WARNING: 2.5 * 60 * 1000,
   URGENT_WARNING: 2.83 * 60 * 1000,
   HARD_CUTOFF: 3 * 60 * 1000
 };
 
-// --- Core Functions ---
+// --- Core Call Management Functions ---
 
+/**
+ * Sets up call duration timers for a connection
+ * 
+ * Creates three timers to manage call duration:
+ * 1. Soft warning at 2:30 - suggests wrapping up
+ * 2. Urgent warning at 2:50 - strongly suggests ending
+ * 3. Hard cutoff at 3:00 - forces call termination
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ */
 function setupCallTimer(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
@@ -100,6 +175,13 @@ function setupCallTimer(connectionId) {
   console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Call timer started - 3 minute limit active`);
 }
 
+/**
+ * Clears all call duration timers for a connection
+ * 
+ * Called when a call ends normally to prevent timer-based call termination.
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ */
 function clearCallTimers(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
@@ -110,6 +192,15 @@ function clearCallTimers(connectionId) {
   console.log(`(ID: ${connectionId}) Call timers cleared`);
 }
 
+/**
+ * Forces the termination of a call
+ * 
+ * Called when call duration limits are exceeded or other critical issues occur.
+ * Closes the WebSocket connection and logs the reason for termination.
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ * @param {string} reason - Reason for forced call termination
+ */
 function forceEndCall(connectionId, reason = "Call duration limit reached") {
     const connectionData = activeConnections.get(connectionId);
     if (!connectionData) return;
@@ -121,6 +212,14 @@ function forceEndCall(connectionId, reason = "Call duration limit reached") {
     }
 }
 
+/**
+ * Stops all active Text-to-Speech streams for a connection
+ * 
+ * Called when user speech is detected to prevent AI from talking over the user.
+ * Clears all active TTS streams and interrupts any currently playing audio.
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ */
 function stopAllTTS(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData || !connectionData.activeTTS) return;
@@ -135,6 +234,16 @@ function stopAllTTS(connectionId) {
   }
 }
 
+/**
+ * Handles AI conversation processing using OpenAI
+ * 
+ * Processes user transcripts through OpenAI GPT-4o-mini to generate intelligent responses.
+ * Manages conversation history and applies time-based prompts for call management.
+ * Streams responses sentence-by-sentence for natural conversation flow.
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ * @param {string} transcript - User's speech converted to text
+ */
 async function handleLLM(connectionId, transcript) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData || !openai) return;
@@ -185,6 +294,16 @@ async function handleLLM(connectionId, transcript) {
   }
 }
 
+/**
+ * Handles Text-to-Speech conversion using ElevenLabs
+ * 
+ * Converts AI text responses to natural-sounding speech using ElevenLabs API.
+ * Streams audio data back to the client for real-time playback.
+ * Manages TTS stream lifecycle and cleanup.
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ * @param {string} textToSpeak - Text to convert to speech
+ */
 async function handleTTS(connectionId, textToSpeak) {
     const connectionData = activeConnections.get(connectionId);
     if (!connectionData || !ELEVENLABS_API_KEY || !textToSpeak) return;
@@ -230,6 +349,14 @@ async function handleTTS(connectionId, textToSpeak) {
     }
 }
 
+/**
+ * Starts a new conversation for a connection
+ * 
+ * Initializes the conversation with system prompts and begins the AI interaction.
+ * Sets up call timers and sends the initial greeting to start the conversation flow.
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ */
 function startConversation(connectionId) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
@@ -255,6 +382,16 @@ function startConversation(connectionId) {
   handleLLM(connectionId, firstUserMessage);
 }
 
+/**
+ * Sends messages to OpenAI for processing
+ * 
+ * Routes user messages to the LLM handler and system messages to conversation history.
+ * Manages the flow of messages between user input and AI processing.
+ * 
+ * @param {string} connectionId - Unique identifier for the connection
+ * @param {string} message - Message content to send
+ * @param {string} role - Role of the message sender ('user' or 'system')
+ */
 function sendToOpenAI(connectionId, message, role) {
   const connectionData = activeConnections.get(connectionId);
   if (!connectionData) return;
@@ -266,8 +403,17 @@ function sendToOpenAI(connectionId, message, role) {
   }
 }
 
-// --- TwiML Generation ---
+// --- TwiML Generation Functions ---
 
+/**
+ * Generates TwiML for call gathering (DTMF input)
+ * 
+ * Creates TwiML markup for collecting user input via phone keypad.
+ * Used when users call in and need to press a key to connect to the AI.
+ * 
+ * @param {string} serverUrl - Base URL of the server for action endpoints
+ * @returns {string} TwiML markup for gathering user input
+ */
 function getGatherTwiML(serverUrl) {
     const actionUrl = new URL('/twilio-voice', serverUrl.replace('ws://', 'http://').replace('wss://', 'https://')).href;
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -280,19 +426,35 @@ function getGatherTwiML(serverUrl) {
 </Response>`;
 }
 
+/**
+ * Generates TwiML for connecting to WebSocket stream
+ * 
+ * Creates TwiML markup that connects the phone call to the WebSocket server
+ * for real-time voice streaming. Sets up the media stream and conversation topic.
+ * 
+ * @param {string} callSid - Twilio Call SID for the current call
+ * @param {string} topic - Conversation topic for the AI assistant
+ * @returns {string} TwiML markup for WebSocket connection
+ */
 function getConnectTwiML(callSid, topic) {
-  const encodedTopic = encodeURIComponent(topic);
-  return `<?xml version="1.0" encoding="UTF-8"?>
+    const encodedTopic = encodeURIComponent(topic);
+    return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="${WEBSOCKET_URL}">
-      <Parameter name="callSid" value="${callSid}"/>
-      <Parameter name="topic" value="${encodedTopic}"/>
-    </Stream>
+    <Stream url="${WEBSOCKET_URL}?callSid=${callSid}&topic=${encodedTopic}" />
   </Connect>
 </Response>`;
 }
 
+/**
+ * Generates TwiML for call hangup with message
+ * 
+ * Creates TwiML markup for ending a call with a farewell message.
+ * Used when calls end normally or due to errors.
+ * 
+ * @param {string} message - Message to speak before hanging up
+ * @returns {string} TwiML markup for call termination
+ */
 function getHangupTwiML(message) {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>

@@ -1,16 +1,55 @@
+/// EmailRecord - Email activity tracking and management
+/// 
+/// This model represents individual email records including:
+/// - Email metadata (ID, user, recipient, subject, content)
+/// - Email type classification (AI-generated vs custom)
+/// - SendGrid integration (message ID, status tracking)
+/// - Email status throughout delivery lifecycle
+/// 
+/// USAGE: Used throughout the app in:
+/// - email_screen.dart: Email composition and sending
+/// - activity_history_screen.dart: Email history display
+/// - activity_record.dart: Unified activity tracking
+/// - api_service.dart: Email data operations
+/// - usage_tracking.dart: Email usage calculations
+/// 
+/// This model is CRITICAL for email functionality and provides
+/// detailed tracking of email attempts, delivery status, and usage metrics.
 import 'package:equatable/equatable.dart';
 
+/// Represents an email record with complete delivery tracking
 class EmailRecord extends Equatable {
+  /// Unique email identifier
   final String id;
+  
+  /// User ID who sent the email
   final String? userId;
+  
+  /// Recipient email address
   final String recipientEmail;
+  
+  /// Email subject line
   final String subject;
+  
+  /// Email content/body (optional for display)
   final String? content;
-  final String type; // ai_generated, custom
+  
+  /// Email type (ai_generated, custom)
+  final String type;
+  
+  /// Topic/subject for AI-generated emails
   final String? topic;
-  final String status; // sent, failed, pending
+  
+  /// Current email status (sent, failed, pending)
+  final String status;
+  
+  /// From email address (defaults to app email)
   final String? fromEmail;
+  
+  /// SendGrid message ID for external service integration
   final String? sendgridMessageId;
+  
+  /// When the email was created/sent
   final DateTime createdAt;
 
   const EmailRecord({
@@ -27,12 +66,18 @@ class EmailRecord extends Equatable {
     required this.createdAt,
   });
 
-  // Helper getters
+  // Helper getters for email status
+  
+  /// Whether the email was successfully sent
   bool get wasSuccessful => status == 'sent';
+  
+  /// Whether the email was AI-generated
   bool get isAiGenerated => type == 'ai_generated';
   
+  /// Helper getter for display from email address
   String get displayFromEmail => fromEmail ?? 'hello@talkah.com';
   
+  /// Helper getter for human-readable status
   String get displayStatus {
     switch (status) {
       case 'sent':
@@ -46,6 +91,7 @@ class EmailRecord extends Equatable {
     }
   }
 
+  /// Helper getter for formatted date display
   String get formattedDate {
     final now = DateTime.now();
     final difference = now.difference(createdAt);
@@ -65,11 +111,14 @@ class EmailRecord extends Equatable {
     }
   }
 
+  /// Helper getter for shortened subject display
   String get shortSubject {
     if (subject.length <= 30) return subject;
     return '${subject.substring(0, 27)}...';
   }
 
+  /// Create EmailRecord from JSON data
+  /// Expects data from the email_records table
   factory EmailRecord.fromJson(Map<String, dynamic> json) {
     return EmailRecord(
       id: json['id'].toString(),
@@ -86,6 +135,7 @@ class EmailRecord extends Equatable {
     );
   }
 
+  /// Convert to JSON for storage
   Map<String, dynamic> toJson() {
     return {
       'id': id,

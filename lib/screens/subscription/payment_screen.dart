@@ -126,7 +126,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           child: ListBody(
             children: <Widget>[
               Text(
-                'Welcome to $_planDisplayName! Your subscription is now active.',
+          'Welcome to $_planDisplayName! Your subscription is now active.',
               ),
             ],
           ),

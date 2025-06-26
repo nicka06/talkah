@@ -280,8 +280,8 @@ class ApiService {
       await SupabaseConfig.client.auth.updateUser(
         supabase.UserAttributes(email: newEmail),
       );
-
-      return true;
+      
+        return true;
     } catch (e, st) {
       ErrorHandlerService().logError(
         AppError.withTimestamp(
