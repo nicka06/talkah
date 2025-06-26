@@ -48,6 +48,9 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the camera to scan credit cards for faster payment processing.</string>
+
 	<!-- Google Sign-In URL Scheme -->
 	<key>CFBundleURLTypes</key>
 	<array>
