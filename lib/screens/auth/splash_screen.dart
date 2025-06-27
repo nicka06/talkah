@@ -82,26 +82,26 @@ class _SplashScreenState extends State<SplashScreen> {
           // AuthLoading and AuthError states are handled by the UI
         },
         child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
               // App logo/branding
               const Text(
                 'TALKAH',
                 style: TextStyle(
                   fontSize: 48,
-                  fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.bold,
                   color: Colors.black,
                   letterSpacing: 2.0,
-                ),
               ),
+            ),
               const SizedBox(height: 32),
               
               // Loading indicator
               const CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-              ),
-            ],
+            ),
+          ],
           ),
         ),
       ),

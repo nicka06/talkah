@@ -1,3 +1,24 @@
+/// AccountInfoScreen - User account information and settings management
+/// 
+/// This screen provides comprehensive account management functionality:
+/// - Displays current user information (email, password status)
+/// - Allows email address changes with verification
+/// - Supports password updates with security validation
+/// - Shows pending verification states for account changes
+/// - Integrates with authentication BLoC for state management
+/// 
+/// ARCHITECTURE:
+/// - Uses BLoC pattern for authentication state management
+/// - Integrates with ApiService for account updates
+/// - Handles pending verification states for security
+/// - Provides secure password masking and validation
+/// 
+/// USER FLOW:
+/// 1. Display current account information
+/// 2. Allow user to edit email or password
+/// 3. Show pending verification states
+/// 4. Handle verification completion
+/// 5. Update account information securely
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/auth/auth_bloc.dart';
@@ -7,6 +28,7 @@ import '../../models/user_model.dart';
 import '../../services/api_service.dart';
 import '../../config/supabase_config.dart';
 
+/// Account information and settings management screen
 class AccountInfoScreen extends StatefulWidget {
   const AccountInfoScreen({super.key});
 
@@ -15,9 +37,14 @@ class AccountInfoScreen extends StatefulWidget {
 }
 
 class _AccountInfoScreenState extends State<AccountInfoScreen> {
+  /// Current user data from authentication state
   UserModel? _currentUser;
+  
+  /// Whether password change is pending verification
   bool _passwordPendingVerification = false;
-  int _passwordLength = 10; // Default password length for display
+  
+  /// Length of password for display masking (default 10 characters)
+  int _passwordLength = 10;
 
   @override
   Widget build(BuildContext context) {

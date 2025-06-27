@@ -7,10 +7,13 @@ import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class OAuthService {
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email', 'profile'],
+    scopes: ['email', 'profile', 'openid'],
+    serverClientId: dotenv.env['GOOGLE_WEB_CLIENT_ID'],
+    clientId: dotenv.env['GOOGLE_IOS_CLIENT_ID'],
   );
 
   /// Generate a cryptographically secure nonce for Google Sign-In
@@ -42,8 +45,17 @@ class OAuthService {
         debugPrint('🔐 OAuthService: Generated nonce for secure authentication');
       }
 
+      if (kDebugMode) {
+        debugPrint('🔐 OAuthService: About to call _googleSignIn.signIn()');
+      }
+
       // Trigger Google Sign-In flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      
+      if (kDebugMode) {
+        debugPrint('🔐 OAuthService: _googleSignIn.signIn() completed');
+      }
+      
       if (googleUser == null) {
         if (kDebugMode) {
           debugPrint('🔐 OAuthService: User cancelled Google Sign-In');
@@ -56,8 +68,18 @@ class OAuthService {
         debugPrint('🔐 OAuthService: Google user signed in: ${googleUser.email}');
       }
 
+      if (kDebugMode) {
+        debugPrint('🔐 OAuthService: About to call googleUser.authentication');
+      }
+
       // Get authentication details
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      if (kDebugMode) {
+        debugPrint('🔐 OAuthService: googleUser.authentication completed');
+        debugPrint('🔐 OAuthService: idToken is null: ${googleAuth.idToken == null}');
+        debugPrint('🔐 OAuthService: accessToken is null: ${googleAuth.accessToken == null}');
+      }
       
       if (googleAuth.idToken == null) {
         throw Exception('Failed to get Google ID token');
@@ -82,6 +104,8 @@ class OAuthService {
     } catch (e) {
       if (kDebugMode) {
         debugPrint('🔐 OAuthService: Google Sign-In Error: $e');
+        debugPrint('🔐 OAuthService: Error type: ${e.runtimeType}');
+        debugPrint('🔐 OAuthService: Error stack trace: ${StackTrace.current}');
       }
       
       // Provide helpful error messages for common issues

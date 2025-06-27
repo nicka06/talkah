@@ -15,6 +15,14 @@ import 'screens/auth/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/dashboard_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/subscription/subscription_screen.dart';
+import 'screens/subscription/payment_screen.dart';
+import 'screens/account/account_info_screen.dart';
+import 'screens/activity/activity_history_screen.dart';
+import 'screens/phone/phone_number_screen.dart';
+import 'screens/sms/sms_screen.dart';
+import 'screens/email/email_screen.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -98,25 +106,49 @@ class MyApp extends StatelessWidget {
             ),
           ),
           debugShowCheckedModeBanner: false,
-          home: BlocBuilder<AuthBloc, AuthState>(
-            builder: (context, state) {
-              if (kDebugMode) {
-                debugPrint('🏠 MAIN BlocBuilder: Building for state ${state.runtimeType}');
-              }
-              
-              if (state is AuthInitial) {
-                // Only show splash on app startup
-                return const SplashScreen();
-              } else if (state is AuthAuthenticated) {
-                // Only navigate to dashboard when actually authenticated
-                return const DashboardScreen();
-              } else {
-                // Stay on LoginScreen for AuthLoading, AuthError, AuthUnauthenticated
-                // This allows the LoginScreen to handle its own loading states and errors
-                return const LoginScreen();
-              }
-            },
-          ),
+          
+          // Add route definitions to fix navigation
+          routes: {
+            '/': (context) => BlocBuilder<AuthBloc, AuthState>(
+              builder: (context, state) {
+                if (kDebugMode) {
+                  debugPrint('🏠 MAIN BlocBuilder: Building for state ${state.runtimeType}');
+                }
+                
+                if (state is AuthInitial) {
+                  // Only show splash on app startup
+                  return const SplashScreen();
+                } else if (state is AuthAuthenticated) {
+                  // Only navigate to dashboard when actually authenticated
+                  return const DashboardScreen();
+                } else {
+                  // Stay on LoginScreen for AuthLoading, AuthError, AuthUnauthenticated
+                  // This allows the LoginScreen to handle its own loading states and errors
+                  return const LoginScreen();
+                }
+              },
+            ),
+            '/login': (context) => const LoginScreen(),
+            '/dashboard': (context) => const DashboardScreen(),
+            '/splash': (context) => const SplashScreen(),
+            '/reset-password': (context) => const ResetPasswordScreen(),
+            '/forgot-password': (context) => const ForgotPasswordScreen(),
+            '/subscription': (context) => const SubscriptionScreen(),
+            '/payment': (context) => const PaymentScreen(planType: 'free', isYearly: false),
+            '/account': (context) => const AccountInfoScreen(),
+            '/activity': (context) => const ActivityHistoryScreen(),
+            '/phone': (context) => const PhoneNumberScreen(),
+            '/sms': (context) => const SmsScreen(),
+            '/email': (context) => const EmailScreen(),
+          },
+          
+          // Add error handling for unknown routes
+          onUnknownRoute: (settings) {
+            debugPrint('🚨 Unknown route: ${settings.name}');
+            return MaterialPageRoute(
+              builder: (context) => const LoginScreen(),
+            );
+          },
         ),
       ),
     );

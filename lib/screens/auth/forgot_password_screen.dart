@@ -83,65 +83,65 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Password reset email sent! Check your inbox.'),
-                backgroundColor: Colors.green,
-              ),
-            );
+                  backgroundColor: Colors.green,
+                ),
+              );
             Navigator.of(context).pop(); // Return to login screen
           } else if (state is AuthError) {
             // Display error notifications when password reset fails
-            ErrorDisplayWidget.showNotification(context, state.error);
+             ErrorDisplayWidget.showNotification(context, state.error);
           }
         },
         child: SafeArea(
-          child: Padding(
+            child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+                  children: [
                   // Title and instructions
                   const Text(
                     'Forgot Password?',
-                    style: TextStyle(
+                      style: TextStyle(
                       fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
                     ),
-                    textAlign: TextAlign.center,
+                      textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
                   const Text(
                     'Enter your email address and we\'ll send you a link to reset your password.',
-                    style: TextStyle(
+                      style: TextStyle(
                       fontSize: 16,
-                      color: Colors.black87,
-                    ),
+                        color: Colors.black87,
+                      ),
                     textAlign: TextAlign.center,
-                  ),
+                    ),
                   const SizedBox(height: 32),
                   
                   // Email input field with validation
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      labelText: 'Email',
+                        labelText: 'Email',
                       border: OutlineInputBorder(),
-                      filled: true,
+                        filled: true,
                       fillColor: Colors.white,
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
-                      }
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your email';
+                        }
                       if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                        return 'Please enter a valid email';
-                      }
-                      return null;
-                    },
-                  ),
+                          return 'Please enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
                   const SizedBox(height: 24),
                   
                   // Submit button for password reset request
@@ -149,9 +149,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     builder: (context, state) {
                       return ElevatedButton(
                         onPressed: state is AuthLoading ? null : _submitResetRequest,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
                         child: state is AuthLoading
@@ -159,11 +159,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             : const Text(
                                 'Send Reset Link',
                                 style: TextStyle(fontSize: 16),
-                              ),
+                        ),
                       );
                     },
-                  ),
-                ],
+                    ),
+                  ],
               ),
             ),
           ),

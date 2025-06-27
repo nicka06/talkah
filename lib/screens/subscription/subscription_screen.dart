@@ -1,3 +1,24 @@
+/// SubscriptionScreen - Comprehensive subscription management interface
+/// 
+/// This screen provides a complete subscription management experience including:
+/// - Current plan display and billing information
+/// - Usage tracking with visual progress bars
+/// - Plan selection with monthly/yearly pricing options
+/// - Payment processing with Platform Pay integration
+/// - Customer portal access for subscription management
+/// 
+/// ARCHITECTURE:
+/// - Uses BLoC pattern for state management (SubscriptionBloc)
+/// - Integrates with SubscriptionService for payment processing
+/// - Supports both Platform Pay (Apple/Google Pay) and card payments
+/// - Handles pending plan changes and billing cycle information
+/// 
+/// USER FLOW:
+/// 1. Load current subscription data via BLoC
+/// 2. Display current plan, usage, and billing information
+/// 3. Allow plan selection with pricing toggle
+/// 4. Process payments through Stripe integration
+/// 5. Provide customer portal access for paid users
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,6 +30,7 @@ import '../../blocs/subscription/subscription_bloc.dart';
 import '../../blocs/subscription/subscription_event.dart';
 import '../../blocs/subscription/subscription_state.dart';
 
+/// Main subscription management screen
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
 
@@ -17,18 +39,25 @@ class SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
+  /// Service instance for subscription operations
   final SubscriptionService _subscriptionService = SubscriptionService();
-  bool _isYearly = false; // Toggle state for pricing
+  
+  /// Toggle state for monthly vs yearly pricing display
+  bool _isYearly = false;
+  
+  /// Whether the device supports Platform Pay (Apple Pay / Google Pay)
   bool _isPlatformPaySupported = false;
 
   @override
   void initState() {
     super.initState();
     _checkPlatformPaySupport();
-    // Load subscription data using BLoC
+    // Load subscription data using BLoC pattern
     context.read<SubscriptionBloc>().add(const LoadSubscriptionData());
   }
 
+  /// Check if the current device supports Platform Pay
+  /// This determines whether to show Apple Pay / Google Pay options
   Future<void> _checkPlatformPaySupport() async {
     try {
       final isSupported = await SubscriptionService.isPlatformPaySupported();
@@ -42,9 +71,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
+  /// Initiate payment process for a selected plan
+  /// 
+  /// This method handles the complete payment flow:
+  /// 1. Show loading dialog
+  /// 2. Create subscription on backend
+  /// 3. Get payment client secret
+  /// 4. Process payment based on platform support
+  /// 5. Handle success/failure responses
   Future<void> _initiatePayment(String planType, bool isYearly) async {
     try {
-      // Show loading dialog
+      // Show loading dialog to indicate payment initiation
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -63,6 +100,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         ),
       );
 
+      // Get current authenticated user
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
         Navigator.pop(context);
@@ -70,7 +108,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         return;
       }
 
-      // Create subscription and get client secret using new SubscriptionService
+      // Create subscription and get client secret using SubscriptionService
+      // This handles the backend subscription creation and Stripe integration
       final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
         email: user.email ?? '',
         userId: user.id,
@@ -89,6 +128,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
+  /// Handle plan selection logic
+  /// 
+  /// For free plan: Trigger downgrade through BLoC
+  /// For paid plans: Initiate payment process
   void _handlePlanSelection(String planType, bool isYearly) {
     if (planType == 'free') {
       context.read<SubscriptionBloc>().add(const DowngradeToFreeRequested());
@@ -97,13 +140,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
+  /// Process payment with the provided client secret
+  /// 
+  /// This method handles the actual payment processing:
+  /// - Platform Pay (Apple Pay / Google Pay) if supported
+  /// - Fallback to card payment if Platform Pay not available
+  /// - Shows appropriate processing dialogs
+  /// - Handles success/failure responses
   Future<void> _processPayment(String planType, bool isYearly, String clientSecret, String email) async {
     try {
-      // Show processing dialog
+      // Show processing dialog with platform-specific messaging
       _showProcessingDialog(_isPlatformPaySupported 
           ? (Platform.isIOS ? 'Processing Apple Pay...' : 'Processing Google Pay...')
           : 'Processing payment...');
 
+      // Get pricing information for display
       final pricing = SubscriptionService.getPricing();
       final key = '${planType}_${isYearly ? 'yearly' : 'monthly'}';
       final amount = pricing[key] ?? 0.0;
@@ -112,14 +163,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       bool success = false;
 
       if (_isPlatformPaySupported) {
-        // Use Platform Pay (Apple Pay / Google Pay)
+        // Use Platform Pay (Apple Pay / Google Pay) for secure, fast payments
         success = await SubscriptionService.processPlatformPay(
           clientSecret: clientSecret,
           amount: amount,
           planName: planName,
         );
       } else {
-        // Fallback to card payment
+        // Fallback to traditional card payment flow
         success = await SubscriptionService.confirmCardPayment(
           clientSecret: clientSecret,
           email: email,
@@ -129,7 +180,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       Navigator.pop(context); // Close processing dialog
 
       if (success) {
-        // Refresh subscription data using BLoC
+        // Refresh subscription data using BLoC to show updated status
         context.read<SubscriptionBloc>().add(const RefreshSubscriptionData());
         _showSuccessDialog(planType, isYearly);
       } else {
@@ -143,6 +194,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
+  /// Show processing dialog during payment operations
   void _showProcessingDialog(String message) {
     showDialog(
       context: context,
@@ -163,6 +215,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Show success dialog after successful payment
   void _showSuccessDialog(String planType, bool isYearly) {
     showDialog(
       context: context,
@@ -200,6 +253,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Show error dialog for payment failures
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -232,9 +286,16 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Open Stripe customer portal for subscription management
+  /// 
+  /// This allows users to:
+  /// - Update payment methods
+  /// - View billing history
+  /// - Cancel subscriptions
+  /// - Download invoices
   Future<void> _openCustomerPortal() async {
     try {
-      // Show loading indicator
+      // Show loading indicator while creating portal session
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -253,12 +314,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         ),
       );
 
+      // Create customer portal session through Stripe
       final portalUrl = await _subscriptionService.createCustomerPortalSession();
       
       Navigator.pop(context); // Close loading dialog
       
       if (portalUrl != null) {
-        // Open the portal URL in browser
+        // Open the portal URL in external browser
         final uri = Uri.parse(portalUrl);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -288,6 +350,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
+  /// Get human-readable plan display name
   String _getPlanDisplayName(String planId) {
     switch (planId) {
       case 'free':
@@ -360,7 +423,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Pending Changes Banner
+                  // Pending Changes Banner - Shows scheduled plan changes
                   if (state is SubscriptionLoaded && state.subscriptionStatus.hasPendingChange) ...[
                     Container(
                       width: double.infinity,
@@ -390,7 +453,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  // Current Plan Name
+                  // Current Plan Name - Prominently displays current subscription
                   Center(
                     child: Text(
                       state is SubscriptionLoaded 
@@ -414,7 +477,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   
                   const SizedBox(height: 16),
                   
-                  // Billing Dates
+                  // Billing Dates - Shows current billing cycle information
                   Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -455,7 +518,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   
                   const SizedBox(height: 32),
                   
-                  // Usage Bars (without cards)
+                  // Usage Bars - Visual representation of current usage vs limits
                   if (state is SubscriptionLoading)
                     Center(
                       child: CircularProgressIndicator(color: Colors.black),
@@ -491,7 +554,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   
                   const SizedBox(height: 40),
                   
-                  // Three Plans Horizontally
+                  // Plan Selection Section
                   Text(
                     'UPGRADE PLANS',
                     style: TextStyle(
@@ -503,7 +566,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Monthly/Annual Toggle
+                  // Monthly/Annual Toggle - Allows users to switch between billing intervals
                   Center(
                     child: Container(
                       decoration: BoxDecoration(
@@ -520,6 +583,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     ),
                   ),
                   
+                  // Show savings message for yearly plans
                   if (_isYearly)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
@@ -537,6 +601,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   
                   const SizedBox(height: 24),
                   
+                  // Plan Cards - Horizontal scrollable list of available plans
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -611,6 +676,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Build toggle button for monthly/yearly billing selection
   Widget _buildToggleButton(String text, bool isSelected) {
     return GestureDetector(
       onTap: () {
@@ -636,6 +702,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Build usage progress bar for a specific feature
   Widget _buildUsageBar({
     required IconData icon,
     required String label,
@@ -706,6 +773,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Build plan card for subscription plan selection
   Widget _buildPlanCard({
     required String planName,
     required String monthlyPrice,
@@ -715,7 +783,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     required SubscriptionState subscriptionState,
     bool isRecommended = false,
   }) {
-    // Get real pricing from Stripe service
+    // Get real pricing from Stripe service for accurate display
     final pricing = SubscriptionService.getPricing();
     final monthlyKey = '${planType}_monthly';
     final yearlyKey = '${planType}_yearly';
@@ -726,7 +794,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final displayPrice = _isYearly ? '\$${realYearlyPrice.toStringAsFixed(2)}' : '\$${realMonthlyPrice.toStringAsFixed(2)}';
     final displayPeriod = _isYearly ? ' / year' : ' / month';
     
-    // Determine if this is the current plan
+    // Determine if this is the current plan and set appropriate button text
     bool isCurrentPlan = false;
     String buttonText = 'UPGRADE';
     bool isButtonDisabled = false;
@@ -805,7 +873,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             
             const SizedBox(height: 8),
             
-            // Price
+            // Price display with period
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -842,7 +910,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             
             const SizedBox(height: 16),
             
-            // Features
+            // Feature list
             ...features.map((feature) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -868,7 +936,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             
             const SizedBox(height: 16),
             
-            // Button
+            // Action button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -896,6 +964,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Calculate and format savings text for yearly plans
   String _getSavingsText(double monthlyPrice, double yearlyPrice) {
     if (monthlyPrice <= 0) return '';
     

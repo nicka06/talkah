@@ -1,3 +1,24 @@
+/// ActivityHistoryScreen - Comprehensive activity tracking and history display
+/// 
+/// This screen provides a complete view of user communication history:
+/// - Displays all communication activities (calls, SMS, emails)
+/// - Shows activity details with timestamps and status
+/// - Provides refresh functionality for real-time updates
+/// - Handles loading states and empty states gracefully
+/// - Allows detailed view of individual activities
+/// 
+/// ARCHITECTURE:
+/// - Uses ApiService to fetch activity data from backend
+/// - Displays activities in chronological order
+/// - Supports pull-to-refresh for data updates
+/// - Handles different activity types with appropriate UI
+/// 
+/// USER FLOW:
+/// 1. Load activity history from API
+/// 2. Display activities in chronological list
+/// 3. Allow user to tap for detailed view
+/// 4. Support refresh for new activities
+/// 5. Handle empty state when no activities exist
 import 'package:flutter/material.dart';
 import '../../models/activity_record.dart';
 import '../../models/call_record.dart';
@@ -5,6 +26,7 @@ import '../../models/email_record.dart';
 import '../../models/sms_record.dart';
 import '../../services/api_service.dart';
 
+/// Activity history display screen
 class ActivityHistoryScreen extends StatefulWidget {
   const ActivityHistoryScreen({super.key});
 
@@ -13,7 +35,10 @@ class ActivityHistoryScreen extends StatefulWidget {
 }
 
 class _ActivityHistoryScreenState extends State<ActivityHistoryScreen> {
+  /// List of activity records loaded from the API
   List<ActivityRecord> _activities = [];
+  
+  /// Whether the screen is currently loading data
   bool _isLoading = true;
 
   @override
@@ -22,6 +47,13 @@ class _ActivityHistoryScreenState extends State<ActivityHistoryScreen> {
     _loadActivityHistory();
   }
 
+  /// Load activity history from the API
+  /// 
+  /// This method:
+  /// - Sets loading state to show progress indicator
+  /// - Fetches activity data from ApiService
+  /// - Updates the UI with loaded activities
+  /// - Handles errors gracefully with user feedback
   Future<void> _loadActivityHistory() async {
     setState(() => _isLoading = true);
     try {

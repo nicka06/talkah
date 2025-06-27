@@ -1,11 +1,36 @@
+/// PaymentScreen - Dedicated payment processing interface
+/// 
+/// This screen handles the complete payment flow for subscription upgrades:
+/// - Displays plan summary and pricing information
+/// - Processes payments through Platform Pay (Apple Pay / Google Pay)
+/// - Shows payment progress and success/failure states
+/// - Integrates with Stripe for secure payment processing
+/// 
+/// ARCHITECTURE:
+/// - Standalone payment processing screen (separate from subscription management)
+/// - Uses SubscriptionService for payment operations
+/// - Supports Platform Pay for enhanced user experience
+/// - Handles payment state management and error recovery
+/// 
+/// USER FLOW:
+/// 1. Display plan summary and pricing
+/// 2. User initiates payment
+/// 3. Create subscription on backend
+/// 4. Process payment through Platform Pay
+/// 5. Show success/failure feedback
+/// 6. Return to previous screen
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/subscription_service.dart';
 
+/// Payment processing screen for subscription upgrades
 class PaymentScreen extends StatefulWidget {
-  final String planType; // 'pro' or 'premium'
+  /// The plan type being purchased ('pro' or 'premium')
+  final String planType;
+  
+  /// Whether this is a yearly subscription (true) or monthly (false)
   final bool isYearly;
 
   const PaymentScreen({
@@ -19,9 +44,16 @@ class PaymentScreen extends StatefulWidget {
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
+  /// Whether a payment is currently being processed
   bool _isProcessing = false;
+  
+  /// Whether the device supports Platform Pay (Apple Pay / Google Pay)
   bool _isPlatformPaySupported = false;
+  
+  /// Human-readable plan name for display
   String? _planDisplayName;
+  
+  /// Payment amount in dollars
   double? _amount;
 
   @override
@@ -31,6 +63,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _checkPlatformPaySupport();
   }
 
+  /// Initialize plan data including pricing and display name
+  /// 
+  /// This method:
+  /// - Retrieves pricing from SubscriptionService
+  /// - Sets the payment amount based on plan and billing interval
+  /// - Creates a human-readable plan name for UI display
   void _initializeData() {
     final pricing = SubscriptionService.getPricing();
     final key = '${widget.planType}_${widget.isYearly ? 'yearly' : 'monthly'}';
@@ -44,6 +82,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  /// Check if the current device supports Platform Pay
+  /// 
+  /// This determines whether to show Apple Pay / Google Pay options
+  /// and affects the payment flow used
   Future<void> _checkPlatformPaySupport() async {
     final isSupported = await SubscriptionService.isPlatformPaySupported();
     if (mounted) {
@@ -53,12 +95,24 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  /// Handle payment button press with processing state management
+  /// 
+  /// Prevents multiple simultaneous payment attempts
   void _handlePaymentPress() {
     if (!_isProcessing) {
       _processPayment();
     }
   }
 
+  /// Process the complete payment flow
+  /// 
+  /// This method handles the entire payment process:
+  /// 1. Validate user authentication
+  /// 2. Create subscription on backend via Stripe
+  /// 3. Get payment client secret
+  /// 4. Process payment through Platform Pay
+  /// 5. Handle success/failure responses
+  /// 6. Update subscription status
   Future<void> _processPayment() async {
     if (_isProcessing || _amount == null) return;
 
@@ -67,12 +121,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
 
     try {
+      // Verify user is authenticated
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
         throw Exception('User not authenticated');
       }
 
-      // Create subscription and get client secret
+      // Create subscription and get client secret from backend
+      // This handles the Stripe subscription creation and returns the payment intent
       final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
         email: user.email ?? '',
         userId: user.id,
@@ -80,7 +136,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
         isYearly: widget.isYearly,
       );
 
-      // Process payment with Platform Pay (Apple Pay / Google Pay)
+      // Process payment using Platform Pay (Apple Pay / Google Pay)
+      // This provides a native, secure payment experience
       final success = await SubscriptionService.processPlatformPay(
         clientSecret: clientSecret,
         amount: _amount!,
@@ -89,7 +146,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
       if (mounted) {
         if (success) {
-          // Refresh subscription status
+          // Refresh subscription status to reflect the new plan
           await SubscriptionService().getSubscriptionStatus();
           
           _showSuccessDialog();
@@ -111,6 +168,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  /// Show success dialog after successful payment
+  /// 
+  /// Displays confirmation message and provides navigation back to main app
   void _showSuccessDialog() {
     showDialog(
       context: context,
@@ -145,6 +205,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
+  /// Show error dialog for payment failures
+  /// 
+  /// Displays error message and allows user to retry or cancel
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
