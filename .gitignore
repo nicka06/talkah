@@ -51,6 +51,8 @@ dev_config.sh
 config.local.dart
 *.env
 *.config.local.*
+/android/key.properties
+/android/app/upload-keystore.jks
 
 # IDE and OS specific
 .idea/

@@ -126,17 +126,15 @@ class OAuthService {
         debugPrint('🔐 OAuthService: Starting Apple Sign-In');
       }
 
-      // Check if Apple Sign In is available (iOS 13+ only)
-      if (!Platform.isIOS) {
-        throw Exception('Apple Sign In is only available on iOS');
-      }
-
-      if (!await SignInWithApple.isAvailable()) {
-        throw Exception('Apple Sign In is not available on this device (requires iOS 13+)');
-      }
+      final webAuthenticationOptions = WebAuthenticationOptions(
+        clientId: dotenv.env['SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID']!,
+        redirectUri: Uri.parse(dotenv.env['APPLE_REDIRECT_URI']!),
+      );
 
       if (kDebugMode) {
         debugPrint('🔐 OAuthService: Apple Sign-In available, requesting credentials');
+        debugPrint('🔐 Sending to Apple -> clientId: ${webAuthenticationOptions.clientId}');
+        debugPrint('🔐 Sending to Apple -> redirectUri: ${webAuthenticationOptions.redirectUri}');
       }
 
       // Trigger Apple Sign-In flow
@@ -145,6 +143,7 @@ class OAuthService {
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
+        webAuthenticationOptions: Platform.isAndroid ? webAuthenticationOptions : null,
       );
 
       if (credential.identityToken == null) {
