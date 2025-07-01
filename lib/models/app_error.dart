@@ -218,6 +218,21 @@ class AppError extends Equatable {
     );
   }
 
+  /// Create user already signed up error
+  factory AppError.userAlreadyExists({
+    String? details,
+  }) {
+    return AppError.withTimestamp(
+      type: ErrorType.authentication,
+      code: 'USER_ALREADY_EXISTS',
+      title: 'Account Already Exists',
+      message: 'An account with this email address already exists.',
+      technicalDetails: details,
+      suggestedAction: 'Please sign in instead, or use a different email address.',
+      isRetryable: false,
+    );
+  }
+
   /// Create unknown error
   factory AppError.unknown({
     String? details,
@@ -247,6 +262,11 @@ class AppError extends Equatable {
     if (exceptionString.contains('email_not_confirmed') ||
         exceptionString.contains('Email not confirmed')) {
       return AppError.emailConfirmation(details: exceptionString);
+    }
+    
+    if (exceptionString.contains('user_already_exists') ||
+        exceptionString.contains('User already registered')) {
+      return AppError.userAlreadyExists(details: exceptionString);
     }
     
     if (exceptionString.contains('AuthException') ||

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
@@ -70,16 +71,14 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: Colors.red, // Consistent with app branding
       body: BlocListener<AuthBloc, AuthState>(
-        // Listen to authentication state changes
+        // Listen to authentication state changes for debugging/logging only
+        // Navigation is handled by the main app router in main.dart
         listener: (context, state) {
-          if (state is AuthAuthenticated) {
-            // User is authenticated, navigate to main app
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (state is AuthUnauthenticated) {
-            // User is not authenticated, navigate to login screen
-            Navigator.of(context).pushReplacementNamed('/login');
+          // Optional: Add logging to track state changes during splash
+          if (kDebugMode) {
+            debugPrint('🌊 SplashScreen: Auth state changed to ${state.runtimeType}');
           }
-          // AuthLoading and AuthError states are handled by the UI
+          // No navigation logic here - main router handles it automatically
         },
         child: Center(
         child: Column(

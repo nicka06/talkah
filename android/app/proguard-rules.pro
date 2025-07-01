@@ -5,7 +5,7 @@
 -keep class io.flutter.view.** { *; }
 -keep class io.flutter.embedding.** { *; }
 -keep class io.flutter.Log { *; }
-
+ 
 # Keep Flutter's main application class
 -keep class io.flutter.embedding.android.FlutterActivity { *; }
 -keep class io.flutter.embedding.android.FlutterApplication { *; }

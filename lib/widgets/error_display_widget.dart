@@ -572,7 +572,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            _getBriefMessage(),
+                            widget.error.title,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
