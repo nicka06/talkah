@@ -136,7 +136,7 @@ serve(async (req: Request) => {
       url: twimlWebhookUrl, // Twilio will POST to this URL when the call connects
       method: "POST",
       statusCallback: `${FUNCTIONS_BASE_URL}twilio-status-callback`, // For call status updates
-      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed', 'failed'],
+      statusCallbackEvents: ['initiated', 'ringing', 'answered', 'completed', 'failed'],
       // Add Asynchronous Answering Machine Detection (AMD)
       machineDetection: 'Enable',
       asyncAmd: true,
