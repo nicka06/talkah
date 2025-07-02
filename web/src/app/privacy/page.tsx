@@ -47,6 +47,19 @@ export default function PrivacyPolicy() {
           <h2 className="font-bold text-xl mb-2 text-black">8. Contact Us</h2>
           <p className="text-black/80">If you have any questions about this Privacy Policy, please contact us at support@talkah.com.</p>
         </section>
+        
+        {/* Account Deletion Link */}
+        <div className="mt-8 pt-6 border-t border-black/20 text-center">
+          <p className="text-xs text-black/60 mb-2">
+            Need to delete your account?
+          </p>
+          <a 
+            href="/delete-account"
+            className="text-sm text-red-600 hover:text-red-800 underline font-medium"
+          >
+            Request Account Deletion
+          </a>
+        </div>
       </div>
     </div>
   );
