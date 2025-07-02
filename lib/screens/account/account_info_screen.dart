@@ -27,6 +27,7 @@ import '../../blocs/auth/auth_event.dart';
 import '../../models/user_model.dart';
 import '../../services/api_service.dart';
 import '../../config/supabase_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Account information and settings management screen
 class AccountInfoScreen extends StatefulWidget {
@@ -121,6 +122,40 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                               isPending: _passwordPendingVerification,
                               pendingValue: null,
                               onEdit: () => _showPasswordChangeDialog(),
+                            ),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // Delete Account Link
+                            GestureDetector(
+                              onTap: () => _openDeleteAccountPage(),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.red[300]!, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.delete_forever,
+                                      color: Colors.red[600],
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Delete Account',
+                                      style: TextStyle(
+                                        color: Colors.red[600],
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -626,5 +661,49 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
         ),
       );
     }
+  }
+
+  void _openDeleteAccountPage() async {
+    final url = 'https://talkah.com/delete-accountac';
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Account'),
+        content: const Text(
+          'This will open the account deletion page in your browser. Are you sure you want to proceed?',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final uri = Uri.parse(url);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Could not open browser. Please visit: $url'),
+                    backgroundColor: Colors.orange,
+                    duration: const Duration(seconds: 5),
+                  ),
+                );
+              }
+            },
+            child: const Text('Open Page'),
+          ),
+        ],
+      ),
+    );
   }
 } 
