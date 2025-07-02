@@ -60,19 +60,45 @@ console.log("Supabase client initialized.");
  */
 let speechClient = null;
 try {
-    console.log("Attempting to initialize Google SpeechClient...");
+    console.log("🔍 Attempting to initialize Google SpeechClient...");
+    console.log("Environment check:", {
+        hasCredentials: !!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT,
+        credentialsLength: process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT ? process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT.length : 0,
+        hasProjectId: !!process.env.GOOGLE_PROJECT_ID,
+        projectId: process.env.GOOGLE_PROJECT_ID || 'NOT_SET'
+    });
+
     const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT;
     if (!credentialsJson) {
         throw new Error("GOOGLE_APPLICATION_CREDENTIALS_JSON_CONTENT is not set.");
     }
-    const credentials = JSON.parse(credentialsJson);
+    
+    let credentials;
+    try {
+        credentials = JSON.parse(credentialsJson);
+        console.log("✅ Credentials JSON parsed successfully:", {
+            hasPrivateKey: !!credentials.private_key,
+            hasClientEmail: !!credentials.client_email,
+            projectIdFromCredentials: credentials.project_id || 'NOT_IN_CREDENTIALS',
+            clientEmail: credentials.client_email || 'NOT_SET'
+        });
+    } catch (parseError) {
+        throw new Error(`Failed to parse credentials JSON: ${parseError.message}`);
+    }
+
+    const finalProjectId = process.env.GOOGLE_PROJECT_ID || credentials.project_id;
+    console.log("🎯 Using project ID:", finalProjectId);
+
     speechClient = new SpeechClient({
-        projectId: process.env.GOOGLE_PROJECT_ID,
+        projectId: finalProjectId,
         credentials,
     });
-    console.log("Google SpeechClient initialized successfully.");
+    console.log("✅ Google SpeechClient initialized successfully.");
 } catch (error) {
-    console.error("CRITICAL: Failed to initialize Google SpeechClient. STT will be disabled.", error);
+    console.error("🚨 CRITICAL: Failed to initialize Google SpeechClient. STT will be disabled.", {
+        error: error.message,
+        stack: error.stack
+    });
 }
 
 /**
@@ -415,7 +441,20 @@ function sendToOpenAI(connectionId, message, role) {
  * @returns {string} TwiML markup for gathering user input
  */
 function getGatherTwiML(serverUrl) {
-    const actionUrl = new URL('/twilio-voice', serverUrl.replace('ws://', 'http://').replace('wss://', 'https://')).href;
+    // Convert WebSocket URL to HTTP URL for Twilio webhook
+    let httpUrl = serverUrl;
+    if (httpUrl.startsWith('ws://')) {
+        httpUrl = httpUrl.replace('ws://', 'http://');
+    } else if (httpUrl.startsWith('wss://')) {
+        httpUrl = httpUrl.replace('wss://', 'https://');
+    }
+    
+    // Ensure we have a proper base URL
+    if (!httpUrl.startsWith('http://') && !httpUrl.startsWith('https://')) {
+        httpUrl = 'https://' + httpUrl;
+    }
+    
+    const actionUrl = `${httpUrl}/twilio-voice`;
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="dtmf" timeout="5" numDigits="1" action="${actionUrl}" method="POST">
@@ -438,10 +477,14 @@ function getGatherTwiML(serverUrl) {
  */
 function getConnectTwiML(callSid, topic) {
     const encodedTopic = encodeURIComponent(topic);
+    // Properly escape the URL for XML - ampersands must be &amp; in XML
+    const websocketUrl = `${WEBSOCKET_URL}?callSid=${callSid}&topic=${encodedTopic}`;
+    const xmlEscapedUrl = websocketUrl.replace(/&/g, '&amp;');
+    
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="${WEBSOCKET_URL}?callSid=${callSid}&topic=${encodedTopic}" />
+    <Stream url="${xmlEscapedUrl}" />
   </Connect>
 </Response>`;
 }
@@ -487,23 +530,55 @@ const server = http.createServer(async (req, res) => {
 
             if (!digits) {
                 console.log(`HTTP: No digits for ${callSid}. Playing welcome message.`);
+                const gatherTwiML = getGatherTwiML(WEBSOCKET_URL);
+                console.log(`🔍 DEBUG: Generated Gather TwiML:`, gatherTwiML);
                 res.writeHead(200, { 'Content-Type': 'application/xml' });
-                res.end(getGatherTwiML(WEBSOCKET_URL));
+                res.end(gatherTwiML);
             } else if (digits === '1') {
                 console.log(`HTTP: User pressed 1 for ${callSid}. Connecting to WebSocket.`);
-                const { data, error } = await supabase
-                    .from('calls')
-                    .select('topic')
-                    .eq('twilio_call_sid', callSid)
-                    .single();
+                
+                // Add retry logic with longer timeout for database lookup
+                let data = null;
+                let error = null;
+                let retries = 3;
+                
+                for (let i = 0; i < retries; i++) {
+                    console.log(`🔍 DEBUG: Database lookup attempt ${i + 1} for CallSid: ${callSid}`);
+                    const result = await supabase
+                        .from('calls')
+                        .select('topic')
+                        .eq('twilio_call_sid', callSid)
+                        .single();
+                    
+                    data = result.data;
+                    error = result.error;
+                    
+                    if (data && !error) {
+                        console.log(`✅ DEBUG: Found call record on attempt ${i + 1}:`, data);
+                        break;
+                    }
+                    
+                    console.log(`❌ DEBUG: Attempt ${i + 1} failed:`, error);
+                    if (i < retries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
+                    }
+                }
                 
                 if (error || !data) {
-                    console.error(`HTTP: Error fetching topic for ${callSid}:`, error);
+                    console.error(`HTTP: Final error fetching topic for ${callSid} after ${retries} attempts:`, error);
+                    // Use a simple message without special characters that might cause XML parsing issues
+                    const hangupTwiML = getHangupTwiML('Goodbye');
+                    console.log(`🔍 DEBUG: Generated Hangup TwiML:`, hangupTwiML);
                     res.writeHead(200, { 'Content-Type': 'application/xml' });
-                    res.end(getHangupTwiML('An error occurred. Please try again later.'));
+                    res.end(hangupTwiML);
                 } else {
+                    const connectTwiML = getConnectTwiML(callSid, data.topic);
+                    console.log(`🔍 DEBUG: Generated Connect TwiML:`, connectTwiML);
+                    console.log(`🔍 DEBUG: WEBSOCKET_URL env var:`, WEBSOCKET_URL);
+                    console.log(`🔍 DEBUG: CallSid:`, callSid);
+                    console.log(`🔍 DEBUG: Topic:`, data.topic);
                     res.writeHead(200, { 'Content-Type': 'application/xml' });
-                    res.end(getConnectTwiML(callSid, data.topic));
+                    res.end(connectTwiML);
                 }
             } else {
                 console.log(`HTTP: User pressed invalid digits '${digits}' for ${callSid}.`);
@@ -588,6 +663,14 @@ wss.on('connection', (socket, req) => {
 
         if (speechClient) {
           try {
+            console.log(`🎤 (ID: ${connectionId}) Creating STT stream with config:`, {
+              encoding: 'MULAW',
+              sampleRateHertz: 8000,
+              languageCode: 'en-US',
+              model: 'telephony',
+              projectId: process.env.GOOGLE_PROJECT_ID || 'NOT_SET'
+            });
+
             recognizeStream = speechClient
               .streamingRecognize({
                 config: {
@@ -600,42 +683,104 @@ wss.on('connection', (socket, req) => {
                 interimResults: true,
               })
               .on('error', (error) => {
-                  console.error(`(ID: ${connectionId}, CallSID: ${callSid}) STT Error:`, error);
+                  console.error(`🚨 (ID: ${connectionId}, CallSID: ${callSid}) STT Error:`, {
+                    code: error.code,
+                    message: error.message,
+                    details: error.details,
+                    stack: error.stack
+                  });
                   if(error.code === 11) {
-                     console.error(`(ID: ${connectionId}) STT stream timed out. Closing connection.`);
+                     console.error(`⏰ (ID: ${connectionId}) STT stream timed out. Closing connection.`);
                       forceEndCall(connectionId, "STT idle timeout");
                   }
               })
               .on('data', (data) => {
+                console.log(`📥 (ID: ${connectionId}, CallSID: ${callSid}) STT received data:`, {
+                  hasResults: !!data.results,
+                  resultsLength: data.results ? data.results.length : 0,
+                  firstResult: data.results && data.results[0] ? {
+                    hasAlternatives: !!data.results[0].alternatives,
+                    alternativesLength: data.results[0].alternatives ? data.results[0].alternatives.length : 0,
+                    isFinal: data.results[0].isFinal,
+                    stability: data.results[0].stability
+                  } : null
+                });
+
                 if (data.results && data.results[0] && data.results[0].alternatives[0]) {
                   const transcript = data.results[0].alternatives[0].transcript.trim();
                   const isFinal = data.results[0].isFinal;
+                  const confidence = data.results[0].alternatives[0].confidence;
+                  
+                  console.log(`🎯 (ID: ${connectionId}, CallSID: ${callSid}) Transcript:`, {
+                    text: transcript,
+                    isFinal,
+                    confidence,
+                    length: transcript.length
+                  });
                   
                   if (isFinal) {
-                    console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
+                    console.log(`✅ (ID: ${connectionId}, CallSID: ${callSid}) Final transcript: "${transcript}"`);
                     sendToOpenAI(connectionId, transcript, 'user');
                   } else if (transcript.length > 0) {
                     // Interim result - stop TTS immediately but don't send to OpenAI yet
-                    console.log(`(ID: ${connectionId}, CallSID: ${callSid}) Interim speech detected, stopping TTS: "${transcript}"`);
+                    console.log(`⚡ (ID: ${connectionId}, CallSID: ${callSid}) Interim speech detected, stopping TTS: "${transcript}"`);
                     stopAllTTS(connectionId);
                   }
+                } else {
+                  console.log(`❌ (ID: ${connectionId}, CallSID: ${callSid}) STT data received but no transcript found`);
                 }
+              })
+              .on('end', () => {
+                console.log(`🔚 (ID: ${connectionId}, CallSID: ${callSid}) STT stream ended`);
+              })
+              .on('close', () => {
+                console.log(`🔒 (ID: ${connectionId}, CallSID: ${callSid}) STT stream closed`);
               });
 
-            console.log(`(ID: ${connectionId}) STT stream initialized successfully.`);
+            console.log(`✅ (ID: ${connectionId}) STT stream initialized successfully.`);
             connectionData.recognizeStream = recognizeStream;
           } catch(err) {
-            console.error(`(ID: ${connectionId}) Failed to create STT stream:`, err);
+            console.error(`💥 (ID: ${connectionId}) Failed to create STT stream:`, {
+              error: err.message,
+              stack: err.stack,
+              code: err.code
+            });
             forceEndCall(connectionId, "STT initialization failed");
           }
         } else {
-            console.error(`(ID: ${connectionId}) speechClient is not initialized. STT will not work.`);
+            console.error(`❌ (ID: ${connectionId}) speechClient is not initialized. STT will not work.`);
         }
         break;
       }
       case 'media': {
-        if (recognizeStream) {
-          recognizeStream.write(msg.media.payload);
+        const audioData = msg.media.payload;
+        const timestamp = msg.media.timestamp;
+        
+        // Debug audio packet info
+        console.log(`🎵 (ID: ${connectionId}) Audio packet received:`, {
+          payloadLength: audioData ? audioData.length : 0,
+          timestamp: timestamp,
+          hasRecognizeStream: !!recognizeStream,
+          recognizeStreamReadable: recognizeStream ? !recognizeStream.destroyed : false
+        });
+
+        if (recognizeStream && !recognizeStream.destroyed) {
+          try {
+            recognizeStream.write(audioData);
+            console.log(`📤 (ID: ${connectionId}) Audio data sent to STT stream (${audioData.length} bytes)`);
+          } catch (error) {
+            console.error(`🚨 (ID: ${connectionId}) Error writing to STT stream:`, {
+              error: error.message,
+              destroyed: recognizeStream.destroyed,
+              writable: recognizeStream.writable
+            });
+          }
+        } else {
+          if (!recognizeStream) {
+            console.warn(`⚠️ (ID: ${connectionId}) No recognizeStream available for audio data`);
+          } else if (recognizeStream.destroyed) {
+            console.warn(`⚠️ (ID: ${connectionId}) recognizeStream is destroyed, cannot write audio`);
+          }
         }
         break;
       }
