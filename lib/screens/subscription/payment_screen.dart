@@ -21,9 +21,10 @@
 /// 6. Return to previous screen
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
+// import 'package:flutter_stripe/flutter_stripe.dart'; // COMMENTED OUT: Replaced with web payments
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/subscription_service.dart';
+import '../../services/web_payment_service.dart'; // ADDED: Web payment service
 
 /// Payment processing screen for subscription upgrades
 class PaymentScreen extends StatefulWidget {
@@ -108,11 +109,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
   /// 
   /// This method handles the entire payment process:
   /// 1. Validate user authentication
-  /// 2. Create subscription on backend via Stripe
-  /// 3. Get payment client secret
-  /// 4. Process payment through Platform Pay
-  /// 5. Handle success/failure responses
-  /// 6. Update subscription status
+  /// 2. Open Stripe Checkout in browser for payment
+  /// 3. Handle success/failure responses
+  /// 4. Update subscription status
   Future<void> _processPayment() async {
     if (_isProcessing || _amount == null) return;
 
@@ -127,32 +126,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
         throw Exception('User not authenticated');
       }
 
-      // Create subscription and get client secret from backend
-      // This handles the Stripe subscription creation and returns the payment intent
-      final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
-        email: user.email ?? '',
-        userId: user.id,
+      // Open Stripe Checkout in browser for payment
+      final success = await WebPaymentService.openStripeCheckout(
         planType: widget.planType,
         isYearly: widget.isYearly,
       );
 
-      // Process payment using Platform Pay (Apple Pay / Google Pay)
-      // This provides a native, secure payment experience
-      final success = await SubscriptionService.processPlatformPay(
-        clientSecret: clientSecret,
-        amount: _amount!,
-        planName: _planDisplayName!,
-      );
-
       if (mounted) {
         if (success) {
-          // Refresh subscription status to reflect the new plan
-          await SubscriptionService().getSubscriptionStatus();
-          
-          _showSuccessDialog();
+          _showPaymentInstructionsDialog();
         } else {
-          // No error dialog here, as the service handles logging the cancellation
-          // This prevents showing an error when a user intentionally closes the pay sheet.
+          _showErrorDialog('Failed to open payment page. Please try again.');
         }
       }
     } catch (e) {
@@ -166,6 +150,49 @@ class _PaymentScreenState extends State<PaymentScreen> {
         });
       }
     }
+  }
+
+  /// Show payment instructions dialog after opening payment page
+  /// 
+  /// Informs user that payment page has opened and they should return to app after payment
+  void _showPaymentInstructionsDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: Row(
+          children: [
+            Icon(Icons.payment, color: Colors.green, size: 32),
+            SizedBox(width: 12),
+            Text(
+              'Payment Page Opened',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Please complete your payment in the browser window that just opened.',
+              style: TextStyle(color: Colors.white),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'After payment, return to this app and pull down to refresh your subscription status.',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('OK', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Show success dialog after successful payment
@@ -364,11 +391,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                     ],
                   ),
-                  child: PlatformPayButton(
-                    type: Platform.isIOS 
-                        ? PlatformButtonType.buy 
-                        : PlatformButtonType.pay,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     onPressed: _handlePaymentPress,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.payment, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Subscribe Now',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),

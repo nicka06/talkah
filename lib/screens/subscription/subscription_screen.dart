@@ -26,6 +26,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:developer' as dev;
 import '../../services/subscription_service.dart';
+import '../../services/web_payment_service.dart';
 import '../../blocs/subscription/subscription_bloc.dart';
 import '../../blocs/subscription/subscription_event.dart';
 import '../../blocs/subscription/subscription_state.dart';
@@ -75,12 +76,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   /// 
   /// This method handles the complete payment flow:
   /// 1. Show loading dialog
-  /// 2. Create subscription on backend
-  /// 3. Get payment client secret
-  /// 4. Process payment based on platform support
-  /// 5. Handle success/failure responses
+  /// 2. Open Stripe Checkout in browser for payment
+  /// 3. Handle success/failure responses
   Future<void> _initiatePayment(String planType, bool isYearly) async {
+    dev.log('💳 SubscriptionScreen: _initiatePayment called with planType=$planType, isYearly=$isYearly');
+    
     try {
+      dev.log('🔄 SubscriptionScreen: Showing loading dialog');
       // Show loading dialog to indicate payment initiation
       showDialog(
         context: context,
@@ -92,7 +94,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               CircularProgressIndicator(color: Colors.white),
               const SizedBox(width: 16),
               Text(
-                'Initiating payment...',
+                'Opening payment page...',
                 style: TextStyle(color: Colors.white),
               ),
             ],
@@ -102,27 +104,37 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
       // Get current authenticated user
       final user = Supabase.instance.client.auth.currentUser;
+      dev.log('🔐 SubscriptionScreen: Checking user authentication');
       if (user == null) {
+        dev.log('❌ SubscriptionScreen: User not authenticated');
         Navigator.pop(context);
         _showErrorDialog('User not authenticated');
         return;
       }
+      
+      dev.log('✅ SubscriptionScreen: User authenticated - ID: ${user.id}');
+      dev.log('🚀 SubscriptionScreen: Calling WebPaymentService.openStripeCheckout');
 
-      // Create subscription and get client secret using SubscriptionService
-      // This handles the backend subscription creation and Stripe integration
-      final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
-        email: user.email ?? '',
-        userId: user.id,
+      // Open Stripe Checkout in browser for payment
+      final success = await WebPaymentService.openStripeCheckout(
         planType: planType,
         isYearly: isYearly,
       );
 
+      dev.log('📊 SubscriptionScreen: WebPaymentService.openStripeCheckout returned: $success');
       Navigator.pop(context); // Close loading dialog
 
-      // Process payment based on platform support
-      await _processPayment(planType, isYearly, clientSecret, user.email ?? '');
+      if (success) {
+        dev.log('✅ SubscriptionScreen: Payment page opened successfully, showing instructions');
+        _showPaymentInstructionsDialog();
+      } else {
+        dev.log('❌ SubscriptionScreen: Failed to open payment page, showing error');
+        _showErrorDialog('Failed to open payment page. Please try again.');
+      }
 
-    } catch (e) {
+    } catch (e, stackTrace) {
+      dev.log('❌ SubscriptionScreen: Exception in _initiatePayment: $e');
+      dev.log('❌ SubscriptionScreen: Stack trace: $stackTrace');
       Navigator.pop(context); // Close loading dialog
       _showErrorDialog('Payment initiation failed: ${e.toString()}');
     }
@@ -130,12 +142,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   /// Handle plan selection logic
   /// 
-  /// For free plan: Trigger downgrade through BLoC
+  /// For free plan: Open Customer Portal for downgrade
   /// For paid plans: Initiate payment process
-  void _handlePlanSelection(String planType, bool isYearly) {
+  void _handlePlanSelection(String planType, bool isYearly) async {
+    dev.log('🎯 SubscriptionScreen: _handlePlanSelection called with planType=$planType, isYearly=$isYearly');
+    
     if (planType == 'free') {
-      context.read<SubscriptionBloc>().add(const DowngradeToFreeRequested());
+      dev.log('🔄 SubscriptionScreen: Handling free plan - opening customer portal');
+      // Open Customer Portal for downgrade/cancellation
+      final success = await WebPaymentService.openStripeCustomerPortal();
+      if (success) {
+        dev.log('✅ SubscriptionScreen: Customer portal opened successfully');
+        _showCustomerPortalInstructionsDialog();
+      } else {
+        dev.log('❌ SubscriptionScreen: Failed to open customer portal');
+        _showErrorDialog('Failed to open customer portal. Please try again.');
+      }
     } else {
+      dev.log('🔄 SubscriptionScreen: Handling paid plan - initiating payment');
       _initiatePayment(planType, isYearly);
     }
   }
@@ -180,8 +204,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       Navigator.pop(context); // Close processing dialog
 
       if (success) {
-        // Refresh subscription data using BLoC to show updated status
-        context.read<SubscriptionBloc>().add(const RefreshSubscriptionData());
+        // Show success dialog - do NOT update subscription status yet
+        // Status will be updated when user returns and manually refreshes
         _showSuccessDialog(planType, isYearly);
       } else {
         // No error dialog here, as the service handles logging the cancellation
@@ -192,6 +216,88 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       Navigator.pop(context); // Close processing dialog
       _showErrorDialog('Payment failed: ${e.toString()}');
     }
+  }
+
+  /// Show payment instructions dialog after opening payment page
+  void _showPaymentInstructionsDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: Row(
+          children: [
+            Icon(Icons.payment, color: Colors.green, size: 32),
+            SizedBox(width: 12),
+            Text(
+              'Payment Page Opened',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Please complete your payment in the browser window that just opened.',
+              style: TextStyle(color: Colors.white),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'After payment, return to this app and pull down to refresh your subscription status.',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('OK', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show customer portal instructions dialog
+  void _showCustomerPortalInstructionsDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: Row(
+          children: [
+            Icon(Icons.settings, color: Colors.blue, size: 32),
+            SizedBox(width: 12),
+            Text(
+              'Customer Portal Opened',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'You can manage your subscription, update payment methods, or cancel your subscription in the browser window that just opened.',
+              style: TextStyle(color: Colors.white),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'After making changes, return to this app and pull down to refresh your subscription status.',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('OK', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Show processing dialog during payment operations
@@ -215,7 +321,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  /// Show success dialog after successful payment
+  /// Show success dialog after payment page opens (NOT after payment completion)
   void _showSuccessDialog(String planType, bool isYearly) {
     showDialog(
       context: context,
@@ -224,27 +330,36 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         backgroundColor: Colors.black,
         title: Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 32),
+            Icon(Icons.payment, color: Colors.green, size: 32),
             const SizedBox(width: 12),
             Text(
-              'Payment Successful!',
+              'Payment Page Opened',
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
         ),
-        content: Text(
-          'Your ${planType.toUpperCase()} plan has been activated. Welcome to premium features!',
-          style: TextStyle(color: Colors.white),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Please complete your ${planType.toUpperCase()} subscription payment in the browser.',
+              style: TextStyle(color: Colors.white),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'After payment, return to this app and pull down to refresh to see your updated subscription.',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              // Refresh the page to show updated plan
-              context.read<SubscriptionBloc>().add(const RefreshSubscriptionData());
+              Navigator.pop(context); // Close dialog only
+              // Do NOT refresh subscription - wait for user to return and manually refresh
             },
             child: Text(
-              'Continue',
+              'OK',
               style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
             ),
           ),
@@ -418,9 +533,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             centerTitle: true,
           ),
           body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                // Refresh subscription data when user pulls down
+                context.read<SubscriptionBloc>().add(const RefreshSubscriptionData());
+              },
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Pending Changes Banner - Shows scheduled plan changes
@@ -671,6 +791,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               ),
             ),
           ),
+        ),
         );
       },
     );

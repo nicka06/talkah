@@ -4,6 +4,7 @@ import '../screens/subscription/subscription_screen.dart';
 import 'dart:io' show Platform;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/subscription_service.dart';
+import '../services/web_payment_service.dart';
 
 class UsageLimitModal {
   static void show({
@@ -37,33 +38,13 @@ class _UsageLimitDialog extends StatefulWidget {
 
 class _UsageLimitDialogState extends State<_UsageLimitDialog> {
   bool _isLoading = false;
-  bool _isPlatformPaySupported = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkPlatformPaySupport();
-  }
-
-  Future<void> _checkPlatformPaySupport() async {
-    try {
-      final isSupported = await SubscriptionService.isPlatformPaySupported();
-      if (mounted) {
-        setState(() {
-          _isPlatformPaySupported = isSupported;
-        });
-      }
-    } catch (e) {
-      print('Error checking platform pay support: $e');
-    }
-  }
 
   Future<void> _initiatePayment(String planType) async {
     if (_isLoading) return;
 
     setState(() => _isLoading = true);
     // Show loading dialog
-    _showProcessingDialog('Initiating payment...');
+    _showProcessingDialog('Opening payment page...');
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -73,16 +54,19 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
         return;
       }
 
-      final clientSecret = await SubscriptionService.createMobileSubscriptionAndGetClientSecret(
-        email: user.email!,
-        userId: user.id,
+      // Use web payment service instead of native payments
+      final success = await WebPaymentService.openStripeCheckout(
         planType: planType,
         isYearly: false, // Hardcoded to monthly for the modal
       );
 
       Navigator.pop(context); // Close loading dialog
 
-      await _processPayment(planType, clientSecret, user.email!);
+      if (success) {
+        _showSuccessDialog();
+      } else {
+        _showErrorDialog('Failed to open payment page. Please try again.');
+      }
 
     } catch (e) {
       Navigator.pop(context); // Close loading dialog
@@ -94,48 +78,7 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
     }
   }
 
-  Future<void> _processPayment(String planType, String clientSecret, String email) async {
-    try {
-      _showProcessingDialog(_isPlatformPaySupported 
-          ? (Platform.isIOS ? 'Processing Apple Pay...' : 'Processing Google Pay...')
-          : 'Processing payment...');
 
-      final pricing = SubscriptionService.getPricing();
-      final key = '${planType}_monthly'; // Always use monthly price
-      final amount = pricing[key] ?? 0.0;
-      final planName = '${planType.toUpperCase()} Plan';
-
-      bool success = false;
-
-      if (_isPlatformPaySupported) {
-        success = await SubscriptionService.processPlatformPay(
-          clientSecret: clientSecret,
-          amount: amount,
-          planName: planName,
-        );
-      } else {
-        success = await SubscriptionService.confirmCardPayment(
-          clientSecret: clientSecret,
-          email: email,
-        );
-      }
-
-      Navigator.pop(context); // Close processing dialog
-
-      if (success) {
-        final subscriptionService = SubscriptionService();
-        await subscriptionService.getSubscriptionStatus();
-        _showSuccessDialog();
-      } else {
-        // No error dialog here, as the service handles logging the cancellation
-        // This prevents showing an error when a user intentionally closes the pay sheet.
-      }
-
-    } catch (e) {
-      Navigator.pop(context); // Close processing dialog
-      _showErrorDialog('Payment failed: ${e.toString()}');
-    }
-  }
 
   void _showProcessingDialog(String message) {
     showDialog(
@@ -162,19 +105,32 @@ class _UsageLimitDialogState extends State<_UsageLimitDialog> {
         backgroundColor: Colors.black,
         title: Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 32),
+            Icon(Icons.payment, color: Colors.green, size: 32),
             const SizedBox(width: 12),
-            Text('Payment Successful!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text('Payment Page Opened', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Text('Your plan has been upgraded!', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Please complete your payment in the browser window that opened.',
+              style: TextStyle(color: Colors.white),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Your subscription will be updated after successful payment.',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.of(context).pop(); // Close success dialog
               Navigator.of(context).pop(); // Close usage limit modal
             },
-            child: Text('Continue', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: Text('OK', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

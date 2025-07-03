@@ -5,11 +5,11 @@ declare global {
 }
 
 // @ts-ignore
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // @ts-ignore
-import Stripe from 'https://esm.sh/stripe@10.17.0?target=deno&deno-std=0.132.0'
+import Stripe from 'https://esm.sh/stripe@14.14.0?target=deno'
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
@@ -55,30 +55,47 @@ serve(async (req) => {
       return new Response('Stripe secret key not set', { status: 500, headers: corsHeaders })
     }
 
-    if (platform === 'web') {
-      // Web: Create Stripe Checkout Session
-      const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        payment_method_types: ['card'],
-        customer: customerId,
-        line_items: [
-          { price: priceId, quantity: 1 }
-        ],
-        success_url: 'https://talkah.com/dashboard/subscription?success=true',
-        cancel_url: 'https://talkah.com/dashboard/subscription',
-        allow_promotion_codes: true
-      })
+    if (platform === 'web' || platform === 'mobile_web') {
+      console.log('Creating Stripe Checkout session for web/mobile_web platform')
+      console.log(`Customer ID: ${customerId}, Price ID: ${priceId}`)
+      
+      try {
+        // Web: Create Stripe Checkout Session
+        const session = await stripe.checkout.sessions.create({
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          customer: customerId,
+          line_items: [
+            { price: priceId, quantity: 1 }
+          ],
+          success_url: 'https://talkah.com/dashboard/subscription?success=true',
+          cancel_url: 'https://talkah.com/dashboard/subscription',
+          allow_promotion_codes: true
+        })
 
-      if (!session.url) {
-        return new Response(JSON.stringify({ error: 'Failed to create Stripe Checkout session' }), {
+        console.log('Stripe Checkout session created successfully:', session.id)
+        console.log('Session URL:', session.url)
+
+        if (!session.url) {
+          console.error('Stripe session created but no URL provided')
+          return new Response(JSON.stringify({ error: 'Failed to create Stripe Checkout session - no URL' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          })
+        }
+        
+        console.log('Returning successful response with URL')
+        return new Response(JSON.stringify({ url: session.url }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        })
+      } catch (stripeError) {
+        console.error('Error creating Stripe Checkout session:', stripeError)
+        return new Response(JSON.stringify({ error: 'Stripe session creation failed', details: stripeError.message }), {
           status: 500,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         })
       }
-      return new Response(JSON.stringify({ url: session.url }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      })
     } else {
       // Mobile: Create subscription and return client_secret for PaymentIntent
       const subscription = await stripe.subscriptions.create({
